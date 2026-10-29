@@ -1,0 +1,36 @@
+# BugLens .gitignore —— 中间产物永不入库（02-MANUAL §12）
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# 环境与密钥
+.env
+.env.*
+
+# 中间产物唯一合法目录
+temp/
+artifacts/
+
+# 前端/演示仓库依赖
+node_modules/
+examples/*/node_modules/
+examples/*/dist/
+
+# 工具
+.playwright/
+.DS_Store
+Thumbs.db
+
+# 大文件（截图原图走 release 附件）
+*.psd
+*.mp4
