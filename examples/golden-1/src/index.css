@@ -1,0 +1,174 @@
+/* Golden-1 global styles — static, no animations (deterministic rendering). */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #1f2937;
+  background: #f3f4f6;
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: #1e3a8a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  z-index: 1000;
+}
+
+.navbar .logo {
+  font-size: 20px;
+  font-weight: 700;
+  margin-right: 40px;
+}
+
+.navbar .nav-links {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+}
+
+/* ---- Bug1: checkout page, CTA partially hidden behind fixed navbar ---- */
+
+.bug1-page {
+  /* 故意不足的顶部留白：卡片顶部内容进入 fixed 导航栏（高 64px）下方 */
+  padding-top: 12px;
+  width: 640px;
+  margin: 0 auto;
+}
+
+.checkout-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.checkout-card h1 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.checkout-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.checkout-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.btn-primary {
+  margin-top: 0;
+  margin-bottom: 16px;
+  width: 100%;
+  height: 48px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ---- Bug2: product spec card, unbreakable token overflows card ---- */
+
+.bug2-page {
+  padding: 32px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.bug2-page h1 {
+  font-size: 20px;
+  margin-bottom: 20px;
+}
+
+.spec-grid {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.spec-card {
+  width: 300px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.spec-card h2 {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+.spec-card p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---- Bug3: pricing page, middle column pushed down ---- */
+
+.bug3-page {
+  padding: 32px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.bug3-page h1 {
+  font-size: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.pricing-grid {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.price-card {
+  width: 240px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px 20px;
+}
+
+.price-card.popular {
+  border-color: #2563eb;
+}
+
+.price-card .plan {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.price-card .amount {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 8px 0 16px;
+}
+
+.price-card ul {
+  list-style: none;
+  font-size: 13px;
+  line-height: 2;
+}

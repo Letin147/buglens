@@ -16,6 +16,7 @@ build/
 # 环境与密钥
 .env
 .env.*
+!.env.example
 
 # 中间产物唯一合法目录
 temp/
