@@ -7,6 +7,7 @@ plus a dom sha256 so downstream steps can compare runs byte-wise (EXP-03).
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,7 @@ class ReproArtifacts:
     dom: Path
     console: Path
     har: Path
+    overlays: Path
     dom_sha256: str
     elapsed_s: float
 
@@ -69,6 +71,7 @@ class Reproducer:
                 page.add_style_tag(content=NO_ANIMATION_CSS)
             page.wait_for_timeout(self.profile.settle_ms)
             dom_html = page.content()
+            overlays = _collect_overlays(page)
             shot_path = run_dir / "screenshot.png"
             page.screenshot(path=str(shot_path), full_page=False)
             context.close()  # flushes the HAR
@@ -77,12 +80,17 @@ class Reproducer:
         dom_path.write_text(dom_html, encoding="utf-8")
         console_path = run_dir / "console.log"
         console_path.write_text("\n".join(console_lines) + "\n", encoding="utf-8")
+        overlays_path = run_dir / "overlays.json"
+        overlays_path.write_text(
+            json.dumps(overlays, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return ReproArtifacts(
             run_dir=run_dir,
             screenshot=shot_path,
             dom=dom_path,
             console=console_path,
             har=run_dir / "network.har",
+            overlays=overlays_path,
             dom_sha256=hashlib.sha256(dom_html.encode("utf-8")).hexdigest(),
             elapsed_s=time.monotonic() - t0,
         )
@@ -115,6 +123,34 @@ class Reproducer:
 
 def _fmt_console(msg: ConsoleMessage) -> str:
     return f"[{msg.type}] {msg.text}"
+
+
+_OVERLAYS_JS = """
+() => {
+  const out = [];
+  for (const el of document.querySelectorAll('*')) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.height < 20) continue;
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      cls: String(el.className || '').slice(0, 60),
+      rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+      zIndex: cs.zIndex,
+    });
+  }
+  return out;
+}
+"""
+
+
+def _collect_overlays(page: Page) -> list[dict[str, object]]:
+    """DOM channel facts for EXP-04: fixed/sticky overlays that can hide content."""
+    result: object = page.evaluate(_OVERLAYS_JS)
+    if not isinstance(result, list):
+        return []
+    return [entry for entry in result if isinstance(entry, dict)]
 
 
 def _guard_local_only(route: Route, request: Request) -> None:
