@@ -70,3 +70,10 @@
 - 结果与证据：密钥在全部 8 个提交的历史中出现次数=0；`git ls-files` 白名单 33 文件与 §7.1 设计一致；`1.txt`/`.env` 从未入库；ruff/mypy/pytest 全绿（3 passed/29s）；GUIRepair 摘要原文 "solve 175 instances"（o4-mini）与 ReBug 原文 "average RSR of 49.96% / 667 real-world bug reports" 均与文档表述精确一致——无幻觉；README/01-PLAN 状态已同步至 W2 进行中。
 - 问题与坑：① `grep -r` 对 `.env` 点文件在本机 Git Bash 下未列出（直接 `ls`+`grep .env` 复核通过）——点文件扫描一律显式点名复核，不依赖通配；② 提交作者为个人 QQ 邮箱，推送后将永久公开——已列入推送前清单 A4 交所有者决策（保留 or noreply+重写，仓库尚无远程，重写安全）。
 - 明日入口：EXP-04 视觉分析官开工（models/ Provider 抽象 + GLMProvider + agents/visual_analyst，提示词版本化进 prompts.py，遮挡类配 DOM 通道）。
+
+## #007 2026-10-29
+- 今日目标：脱敏推送 + EXP-04 视觉分析官。
+- 做了什么：① 脱敏：GitHub ID 259059639，git 身份改 Letin147 <noreply>，rebase 重写全部 9 提交（作者仅剩 noreply，密钥历史复扫 0）；② PRE_PUSH_CHECKLIST 全项通过后建仓推送 https://github.com/Letin147/buglens（topics×8），CI 首跑 15s 绿，main 分支保护（require PR+check，admin 可绕）；③ EXP-04：models/ Provider 层+缓存+GLMProvider、graph/state.py、agents/visual_analyst（v3-domfacts 提示词）、overlays 采集、mock 单测×5；按分支纪律走 PR #1（CI 绿）；④ 真实运行 2/3（配额窗口 2 次）。
+- 结果与证据：门禁三绿（mypy 18 文件/pytest 8 passed）；**bug1 遮挡类首次区域命中**（DOM 事实通道生效，EXP-02 三连漏检被翻盘，因果仍偏差）；bug2 命中 conf 0.9；缓存 cached=True；bug3 挂起待配额。详见 REPORT EXP-04。
+- 问题与坑：① 本机存在**失效的 GITHUB_TOKEN 环境变量**，会劫持 gh 与 git push 凭据（credential.helper=manager-core 下尤甚）——一律 `env -u GITHUB_TOKEN -u GH_TOKEN` 前缀绕过（已沉淀为惯用法，未改用户环境）；② 免费档配额窗口实测 2 次/窗口、当日累计约 8 次即长时间 429；③ mypy strict 抓到 get_api_key 缺 return 的真 bug（门禁价值实证）。
+- 明日入口：bug3 补测（配额恢复即跑）→ EXP-05 定位官（BM25+bge-m3+tree-sitter 三路召回 RRF 融合，行级 top-5）。
