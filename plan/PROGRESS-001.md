@@ -49,3 +49,10 @@
   4. 【化妆问题】Git Bash 以 GBK 显示 UTF-8 制表符致 CLI 输出乱码，功能无损（Windows Terminal+UTF-8 可解）。
 - 明日入口：EXP-02 VLM 摸底——① 注册智谱 key（GLM-4V-Flash 免费档）；② 选定 golden-1 案例仓库并人工截 3 张 bug 截图存 temp/；③ 按 EXP-02 指令块执行（脚本不入库）。
 
+
+## #004 2026-10-29
+- 今日目标：EXP-02 VLM 摸底（W1 第二项）。
+- 做了什么：智谱 key 入库（.env，gitignore 验证；删除明文 1.txt；新增 .env.example）；搭 golden-1 案例仓库（Vite5+React18+TS，3 个 bug 页面）；补装 Playwright chromium v1200；三轮探测（v1×原案例 → ground truth 核验 → 案例重构 → v2×新案例）；独立视觉分析工具核验全部 ground truth。
+- 结果与证据：v1 解析 2/3（命中皆吹毛求疵）；v2 解析 2/3（bug3 部分命中=专业版卡片错位；bug1 三连漏检；bug2 限流无数据）；免费档限流窗口 >10 分钟。详细三轮对照与五条结论见 REPORT EXP-02。
+- 问题与坑：① SKU 含连字符即可断行——溢出案例必须用无断点长串；② "约 90% 隐藏"的缺陷对人对模型都不可检，案例要"明显但不极端"；③ 免费档长限流：探测类任务改天再跑或切付费档；④ python 后台跑脚本要加 -u 否则 stdout 缓冲看不到进度；⑤ probe 脚本读 .env 是相对路径，必须从项目根运行。
+- 明日入口：W2/EXP-03 复现官确定性 profile（ReproProfile：固定视口/时区/禁动画/种子 + golden-1 连跑 10 次 dom 哈希一致、SSIM≥0.999）；bug2 补测窗口恢复后顺带跑。
