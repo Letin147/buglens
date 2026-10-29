@@ -239,6 +239,8 @@ buglens/
 
 - [x] 2026-10-28 两轮调研与证伪深查（定稿区两份文档）
 - [x] 2026-10-28 管理体系建立（本手册 + 02/03/04 + PROGRESS/REPORT 卷一）
-- [x] 2026-10-29 W1/EXP-01 完成：命名核查（保留 buglens，PyPI 空闲）、`git init -b main`、仓库基建、conda lumin 安装验收全绿（详见 REPORT EXP-01 / PROGRESS #003）
-- [ ] W1 剩余：注册智谱 key（GLM-4V-Flash 免费档）→ 选定 golden-1 案例仓库并截 3 张 bug 图 → EXP-02 VLM 摸底
-- [ ] 待用户操作：GitHub 建远程仓库并推送（CI 首跑）；两台挂钟：2027-01 前基准 arXiv 占坑（M2）；每月最后一个周五 EXP-12 月扫
+- [x] 2026-10-29 W1 完成：EXP-01 基建验收全绿（SKILL-03 沉淀）；EXP-02 VLM 摸底结案（免费档长限流+遮挡类漏检实测，golden-1 入库）
+- [x] 2026-10-29 W2/EXP-03 复现官确定性 10 连跑验收通过（含"孤儿服务器假复现"修复）；同日完成首次全库安全与一致性审计（密钥历史 0 泄露、门禁三绿、关键引用回源属实）
+- [ ] **下一步：EXP-04 视觉分析官**（models/ Provider 抽象 + GLMProvider + agents/visual_analyst；提示词版本化；遮挡类走 DOM 通道）
+- [ ] 待所有者决策：推送前提交作者邮箱（保留 QQ 邮箱 or 改 GitHub noreply 后重写历史，见 [PRE_PUSH_CHECKLIST](PRE_PUSH_CHECKLIST.md) A4）
+- [ ] 挂钟：2027-01 前基准 arXiv 占坑（M2）；每月最后一个周五 EXP-12 月扫

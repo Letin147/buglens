@@ -63,3 +63,10 @@
 - 结果与证据：第二轮 10 连跑 DOM=d3d48e44f397 全一致、SSIM=1.000000×9、采集 2.2–2.5s/次（含启动 ~4s/次）、总 83s；ruff/mypy 绿；bug2 补测 symptom 正确识别溢出。详见 REPORT EXP-03 / EXP-02 补测。
 - 问题与坑：① Git Bash 下 taskkill 的 /F /T 会被 MSYS 转成路径，须用 //F //T 形式（或 Python subprocess 数组传参不受影响）；② 后台 dev server 绝不能靠"杀 bash 任务"停止（不杀进程树留孤儿）——一律经 DevServerLauncher（现在有端口占用/释放双断言兜底）；③ vite dev 的 HMR websocket 使 networkidle 不可达，确定性锚点=固定 settle 时间；④ 第一轮"13 连跑全绿"是假复现——指标全绿≠语义正确，端口占用断言就是为这类静默错误设计的。
 - 明日入口：EXP-04 视觉分析官（models/ Provider 抽象 + GLMProvider + agents/visual_analyst，提示词版本化进 prompts.py；遮挡类走 DOM+分块）。
+
+## #006 2026-10-29
+- 今日目标：首次全库安全与一致性审计（用户指令：脱敏/防幻觉/一致性/卫生/深度核查，推送 GitHub 前必须干净）。
+- 做了什么：六项安全扫描（密钥历史/入库白名单/工作区密钥/作者信息/文件清单/TODO 与硬编码）；门禁三连复跑；两项承重研究数字回源核验（arXiv 原文摘要）；文档状态同步（README 徽章与里程碑、01-PLAN §10）；新增 plan/PRE_PUSH_CHECKLIST.md（A 脱敏/B 质量/C 语义三段）并升级 02-MANUAL 至 v1.2（新约束 E06：推送前清单强制）。
+- 结果与证据：密钥在全部 8 个提交的历史中出现次数=0；`git ls-files` 白名单 33 文件与 §7.1 设计一致；`1.txt`/`.env` 从未入库；ruff/mypy/pytest 全绿（3 passed/29s）；GUIRepair 摘要原文 "solve 175 instances"（o4-mini）与 ReBug 原文 "average RSR of 49.96% / 667 real-world bug reports" 均与文档表述精确一致——无幻觉；README/01-PLAN 状态已同步至 W2 进行中。
+- 问题与坑：① `grep -r` 对 `.env` 点文件在本机 Git Bash 下未列出（直接 `ls`+`grep .env` 复核通过）——点文件扫描一律显式点名复核，不依赖通配；② 提交作者为个人 QQ 邮箱，推送后将永久公开——已列入推送前清单 A4 交所有者决策（保留 or noreply+重写，仓库尚无远程，重写安全）。
+- 明日入口：EXP-04 视觉分析官开工（models/ Provider 抽象 + GLMProvider + agents/visual_analyst，提示词版本化进 prompts.py，遮挡类配 DOM 通道）。

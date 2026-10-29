@@ -3,7 +3,7 @@
 > **从一张报错截图，到一条可合并的修复 PR。**
 > 证据链驱动的多模态多智能体 UI 缺陷修复系统（Evidence-Chained Multimodal Bug-Fixing Agents）
 
-[![Status](https://img.shields.io/badge/status-W1--pending-orange)](plan/01-PLAN.md)
+[![Status](https://img.shields.io/badge/status-W2__in__progress-orange)](plan/01-PLAN.md)
 [![Platform](https://img.shields.io/badge/platform-CPU--only-blue)]()
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)]()
 
@@ -39,11 +39,11 @@ src/ 等   【代码区】W1 按 02-MANUAL §7 建立
 
 ## 当前状态与里程碑
 
-🚧 **W1 待启动**（2026-10-28 立项，策划与管理体系已就绪）
+🚧 **W2 进行中**（2026-10-29：W1 已完成——EXP-01 基建验收全绿、EXP-02 VLM 摸底结案；W2/EXP-03 复现官确定性 10 连跑验收通过；已通过首次全库安全与一致性审计）
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
-| W1–W4 = M0 | MVP：React + Playwright + GLM-4V-Flash，golden 3/3，<¥1/案例 | 待启动 |
+| W1–W4 = M0 | MVP：React + Playwright + GLM-4V-Flash，golden 3/3，<¥1/案例 | **W1 ✓ · W2 进行中** |
 | W5–W8 = M1 | 证据链 PR + GitHub Action + v0.1.0 发布 | 待启动 |
 | M2 | VisBugBench-Pro 基准（2027-01 前 arXiv 占坑） | 规划 |
 | M3 | v1.0 发布日（MCP 形态 + 中英双语 + 集中导流） | 规划 |
