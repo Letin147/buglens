@@ -56,3 +56,10 @@
 - 结果与证据：v1 解析 2/3（命中皆吹毛求疵）；v2 解析 2/3（bug3 部分命中=专业版卡片错位；bug1 三连漏检；bug2 限流无数据）；免费档限流窗口 >10 分钟。详细三轮对照与五条结论见 REPORT EXP-02。
 - 问题与坑：① SKU 含连字符即可断行——溢出案例必须用无断点长串；② "约 90% 隐藏"的缺陷对人对模型都不可检，案例要"明显但不极端"；③ 免费档长限流：探测类任务改天再跑或切付费档；④ python 后台跑脚本要加 -u 否则 stdout 缓冲看不到进度；⑤ probe 脚本读 .env 是相对路径，必须从项目根运行。
 - 明日入口：W2/EXP-03 复现官确定性 profile（ReproProfile：固定视口/时区/禁动画/种子 + golden-1 连跑 10 次 dom 哈希一致、SSIM≥0.999）；bug2 补测窗口恢复后顺带跑。
+
+## #005 2026-10-29
+- 今日目标：W2/EXP-03 复现官确定性 profile。
+- 做了什么：src/buglens/repro/ 三模块（profile/launcher/reproducer，localhost-only 路由守卫先行落地 T10）；tests/test_repro_determinism.py（块 SSIM+DOM 哈希，BUGLENS_REPRO_RUNS 可调）；pyproject dev extras 增 numpy/pillow；两轮验收（第一轮被孤儿服务器污染→修复端口断言→第二轮真 10 连跑）；顺带完成 EXP-02 的 bug2 补测（命中）。
+- 结果与证据：第二轮 10 连跑 DOM=d3d48e44f397 全一致、SSIM=1.000000×9、采集 2.2–2.5s/次（含启动 ~4s/次）、总 83s；ruff/mypy 绿；bug2 补测 symptom 正确识别溢出。详见 REPORT EXP-03 / EXP-02 补测。
+- 问题与坑：① Git Bash 下 taskkill 的 /F /T 会被 MSYS 转成路径，须用 //F //T 形式（或 Python subprocess 数组传参不受影响）；② 后台 dev server 绝不能靠"杀 bash 任务"停止（不杀进程树留孤儿）——一律经 DevServerLauncher（现在有端口占用/释放双断言兜底）；③ vite dev 的 HMR websocket 使 networkidle 不可达，确定性锚点=固定 settle 时间；④ 第一轮"13 连跑全绿"是假复现——指标全绿≠语义正确，端口占用断言就是为这类静默错误设计的。
+- 明日入口：EXP-04 视觉分析官（models/ Provider 抽象 + GLMProvider + agents/visual_analyst，提示词版本化进 prompts.py；遮挡类走 DOM+分块）。
