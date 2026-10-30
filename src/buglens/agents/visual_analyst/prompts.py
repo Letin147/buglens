@@ -5,12 +5,14 @@ Version history (kept here per 02-MANUAL: prompt changes are code changes):
 - v2-20261029: enumerated functional defect classes, excludes style taste
   (EXP-02: fixed misalignment miss; overflow hit after supplement; occlusion still missed)
 - v3-20261029: adds trustworthy DOM facts about fixed/sticky overlay elements and
-  directs attention to content they may cover (EXP-04 occlusion countermeasure)
+  directs attention to content they may cover (EXP-04: occlusion region-hit, cause inverted)
+- v4-20261029: adds covered-element clues (what sits under each overlay), so the
+  model can name the occluded element instead of guessing the direction
 """
 
 from __future__ import annotations
 
-PROMPT_VERSION = "v3-domfacts-20261029"
+PROMPT_VERSION = "v4-covered-20261029"
 
 _TEMPLATE = (
     "你是 UI 缺陷检测器。仔细检查这张网页截图（1280x800 像素），找出最严重的「功能性视觉缺陷」。\n"
@@ -23,8 +25,9 @@ _TEMPLATE = (
     "\n"
     "页面布局事实（来自 DOM 实测，完全可信）：\n"
     "{dom_facts}\n"
-    "提示：上述固定/吸顶元素会覆盖其矩形范围内的所有内容。若页面顶部存在此类覆盖层，"
-    "请重点检查被其覆盖的区域里是否有内容被截断或遮挡。\n"
+    "解读规则：上面每个「覆盖层」会遮住其矩形范围内的内容；其 covers 列表给出实测"
+    "被它遮住超过一半面积的元素（含文字）。若 covers 非空，说明确有内容被该覆盖层遮挡，"
+    "缺陷方向是「覆盖层遮住了 covers 中的元素」，请以截图对照确认。\n"
     "\n"
     "只输出一个 JSON 对象，不要任何其他文字、解释或代码块标记：\n"
     '{{"anomaly_region": [x, y, w, h], "symptom": "一句话中文描述", '

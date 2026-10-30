@@ -29,6 +29,7 @@ examples/*/dist/
 
 # 工具
 .playwright/
+.buglens/
 .DS_Store
 Thumbs.db
 
