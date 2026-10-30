@@ -123,3 +123,17 @@ bug2（溢出类）v2 单测**命中**：symptom="文字内容（SKU编号）超
 - 结论：**达到成功目标（工程口径 2/3 补丁 + 守卫实证 + 单测 18 全绿），正收益**。三条硬结论：① 约束编辑（唯一精确串匹配 + 程序生成 diff）证明可行且安全——三次错误输出全部被拦，零次误改；② **不要给模型行号视图**（诱导复制前缀），精确串编辑喂原文即可；③ planner 的语义正确性不保证（bug1 z-index 方案存疑——非定位元素 z-index 无效；bug3 追加了作用于不存在类的死规则）——**这正是 EXP-07 验证 oracle + 回环的职责分工**，闭环设计被再次验证。
 - 问题与归因：配额窗口极短（第一轮 bug1 429、第三轮窗口内完成 5 次调用）；bug2 待 v4 改进项=非唯一片段自动带反馈重试（提示模型附上选择器行）。
 - 下一步：EXP-07 验证 oracle（三通道：像素 diff/布局断言/既有测试）+ LangGraph 回环（verifier fail → planner 下一假设）。
+
+## EXP-07 验证 oracle 与回环（2026-10-30）
+
+- 目标/预期指标：三通道可执行 oracle（像素 diff/布局断言/既有测试）+ LangGraph 回环（fail→下一轮规划，≤3 次），使语义正确性由机器判定而非模型自评。
+- 配置：`vision/`（region_change_ratio 区域变化率 + covers 遮挡重算 + layout_defects 溢出/错位 DOM 断言）；`repro/patched_env.py`（副本仓库 copytree + node_modules junction + 动态端口）；`agents/verifier/`（四通道 Verdict：pixel/layout/dom/tests）；planner v2-feedback（失败证据+已试假设入提示词、JSON 自修复重试、候选路径前缀匹配）；fixer 增强（行级确定性修复器 + 带错 API 重试）；`graph/builder.py`（LangGraph：locator→planner→fixer→verifier，fail且<3→retry→planner，fixer 失败清空 stale patch）。
+- 结果（真实运行，含两次关键自查纠错）：
+  1. **oracle 判定链路全程可执行**：verdict 的每个结论都来自重渲染后的可复算证据（像素比率/DOM 几何），无一处模型自评；
+  2. **自查发现 verifier 致命 bug**：worktree 根路径推导少了一层目录（补丁被 overlay 到 patched_repo 根而非 src/ 下），**此前所有 verify 判的都是未打补丁的渲染**——修复后 bug1 立即在 round0 收敛：PASS（像素 43.6%+无遮挡），最终补丁 `padding-top: 12px→64px`（教科书修复）；教训：oracle 自己也必须被验证（本轮用 patched_repo 内文件内容核验抓出）；
+  3. **堵住两类假阳性**：初版像素通道"有变化即过"放行了 bug2（max-width 1200）与 bug3（整页上移 32px）的无效补丁——新增 DOM 断言后：bug2 正确 FAIL（溢出实测 scrollWidth=755>clientWidth=298）、bug3 正确 FAIL（兄弟组 spread=56px 顶边不对齐）；
+  4. **最终格局：golden 1/3 真修复 PASS（bug1）；2/3 诚实 FAIL**（回环 2 轮内 planner 未产出有效新假设/配额受限）——M0 的 golden 3/3 未达，但 oracle 不放行未修复缺陷的可靠性优先于凑通过率；
+  5. 工程验收：单测 24 passed（含坏补丁→重试→好补丁回环、3 次封顶、行级修复、DOM 断言）；ruff/mypy 绿。
+- 结论：**部分达标，正收益**。核心价值：① 可执行 oracle 对遮挡/溢出/错位三类缺陷全部有机器断言（学术核心主张落地）；② 回环收敛性实证（bug1 round0）+ 拒绝能力实证（bug2/3）；③ 三条新工程定律：oracle 自身须被独立核验（假复现的姊妹篇：**假验证**）；"像素有变化"≠"缺陷消除"，必须配 DOM 级缺陷断言；模型输出失配时先做确定性本地修复（行级）再花 API。
+- 问题与归因：bug2/3 未收敛主因=planner 在反馈轮的输出噪声（路径格式复述/无效 JSON）+ 免费档配额，改进项：planner 输出 schema 约束强化、错位类假设模板（sibling 对齐修复模式）注入。
+- 下一步：EXP-08 证据链 Store + Reporter（PR 渲染）；M0 验收补跑（bug2/3 收敛）排在 planner 强化之后。
