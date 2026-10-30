@@ -93,8 +93,15 @@ def _format_overlays(overlays_path: Path | None) -> str:
     for entry in entries:
         rect = entry.get("rect", [0, 0, 0, 0])
         lines.append(
-            f"- <{entry.get('tag', '?')}> class={entry.get('cls', '')!r} "
+            f"- 覆盖层 <{entry.get('tag', '?')}> class={entry.get('cls', '')!r} "
             f"矩形 [x={rect[0]}, y={rect[1]}, w={rect[2]}, h={rect[3]}] "
             f"z-index={entry.get('zIndex', 'auto')}"
         )
+        for covered in entry.get("covers", []):
+            c_rect = covered.get("rect", [0, 0, 0, 0])
+            lines.append(
+                f"    被它遮住: <{covered.get('tag', '?')}> class={covered.get('cls', '')!r} "
+                f"文字={covered.get('text', '')!r} 矩形 [x={c_rect[0]}, y={c_rect[1]}, "
+                f"w={c_rect[2]}, h={c_rect[3]}]"
+            )
     return "\n".join(lines)

@@ -127,17 +127,36 @@ def _fmt_console(msg: ConsoleMessage) -> str:
 
 _OVERLAYS_JS = """
 () => {
+  const all = Array.from(document.querySelectorAll('*'));
   const out = [];
-  for (const el of document.querySelectorAll('*')) {
+  for (const el of all) {
     const cs = getComputedStyle(el);
     if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
     const r = el.getBoundingClientRect();
     if (r.width < 40 || r.height < 20) continue;
+    const covers = [];
+    for (const other of all) {
+      if (other === el || el.contains(other) || other.contains(el)) continue;
+      const or = other.getBoundingClientRect();
+      if (or.width < 10 || or.height < 4) continue;
+      const ix = Math.max(0, Math.min(r.right, or.right) - Math.max(r.left, or.left));
+      const iy = Math.max(0, Math.min(r.bottom, or.bottom) - Math.max(r.top, or.top));
+      if (ix > or.width * 0.5 && iy > or.height * 0.5) {
+        covers.push({
+          tag: other.tagName.toLowerCase(),
+          cls: String(other.className || '').slice(0, 60),
+          text: (other.textContent || '').trim().slice(0, 30),
+          rect: [Math.round(or.x), Math.round(or.y), Math.round(or.width), Math.round(or.height)],
+        });
+        if (covers.length >= 5) break;
+      }
+    }
     out.push({
       tag: el.tagName.toLowerCase(),
       cls: String(el.className || '').slice(0, 60),
       rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
       zIndex: cs.zIndex,
+      covers,
     });
   }
   return out;

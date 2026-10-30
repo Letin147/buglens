@@ -77,3 +77,10 @@
 - 结果与证据：门禁三绿（mypy 18 文件/pytest 8 passed）；**bug1 遮挡类首次区域命中**（DOM 事实通道生效，EXP-02 三连漏检被翻盘，因果仍偏差）；bug2 命中 conf 0.9；缓存 cached=True；bug3 挂起待配额。详见 REPORT EXP-04。
 - 问题与坑：① 本机存在**失效的 GITHUB_TOKEN 环境变量**，会劫持 gh 与 git push 凭据（credential.helper=manager-core 下尤甚）——一律 `env -u GITHUB_TOKEN -u GH_TOKEN` 前缀绕过（已沉淀为惯用法，未改用户环境）；② 免费档配额窗口实测 2 次/窗口、当日累计约 8 次即长时间 429；③ mypy strict 抓到 get_api_key 缺 return 的真 bug（门禁价值实证）。
 - 明日入口：bug3 补测（配额恢复即跑）→ EXP-05 定位官（BM25+bge-m3+tree-sitter 三路召回 RRF 融合，行级 top-5）。
+
+## #008 2026-10-29
+- 今日目标：EXP-05 定位官 + bug3 补测。
+- 做了什么：repo/（tree-sitter 切片+CSS 规则切片+BM25+bge-m3 向量）、agents/locator（RRF 融合+证据挂接）、CLI index init、overlays covers 线索扩展、提示词 v4-covered；bge-m3 魔搭下载+bin→safetensors 本地转换；真实定位两轮（首轮 bug2 漏检→修 identifier 连字符 bug→3/3）。
+- 结果与证据：门禁三绿（pytest 14 passed）；索引 32 切片/31.5s；**真实定位 3/3 全部 top-1 三通道全亮**（bug1=index.css:41-48 精确到修复行）；covers 实采=navbar→button.btn-primary"提交订单"。bug3 VLM 补测与 v4 验证仍被配额挡（两次 429），顺延。
+- 问题与坑：① transformers CVE-2025-32434 闸门：torch<2.6 拒绝 torch.load *.bin——解法=转 safetensors（safetensors.torch 需显式 import 子模块）；embedder 兜底要广谱捕获（ValueError 漏网教训）；② sentence-transformers 走 hf-mirror 会 HEAD 校验失败，改魔搭 snapshot_download 一发入魂；③ conda run 不支持多行 -c（第二次踩，已固化直调 python.exe）；④ identifier 检索必须与索引侧同构分词（连字符），fixture 别太仁慈。
+- 明日入口：配额恢复→bug3 补测+v4 因果验证；EXP-06 修复工程师（planner/fixer + 最小 diff + worktree 副本应用/回滚）。

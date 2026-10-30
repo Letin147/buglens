@@ -26,6 +26,9 @@ dependencies = [
   "langgraph>=1.2",
   "playwright>=1.40",
   "pydantic>=2.7",
+  "tree-sitter>=0.24",
+  "tree-sitter-typescript>=0.23",
+  "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +58,15 @@ select = ["E4", "E7", "E9", "F", "I"]
 strict = true
 python_version = "3.11"
 files = ["src"]
+
+[[tool.mypy.overrides]]
+module = [
+  "tree_sitter.*",
+  "tree_sitter_typescript",
+  "rank_bm25.*",
+  "sentence_transformers.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

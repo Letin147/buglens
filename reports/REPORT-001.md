@@ -91,3 +91,17 @@ bug2（溢出类）v2 单测**命中**：symptom="文字内容（SKU编号）超
 - 结论：**部分达标——已跑 2/2 全部命中 + 缓存与工程验收全过；bug3 数据点挂起**。核心结论：**DOM 事实通道对遮挡类有效**（漏检+幻觉 → 区域命中+因果待精化），EXP-02 结论②的双通道路线获得正面实证；遮挡类因果归因需 DOM 通道更进一步（overlays 尚未记录"覆盖层之下被挡元素"的线索，EXP-05 定位官补齐）。
 - 问题与归因：① 免费档配额窗口极小（本窗口 2 次），当日累计约 8 次成功——产品化必须配付费低价档（T03 降级链再次被验证）；② 因果偏差归因=提示词只给了覆盖层矩形，未给被覆盖内容线索（改进项已列入 EXP-05）。
 - 下一步：bug3 补测（配额恢复即跑）；EXP-05 定位官（DOM↔组件↔AST 检索，行级 top-5）。
+
+## EXP-05 定位官（2026-10-29）
+
+- 目标/预期指标：从视觉报告+DOM 线索走到行级 top-5 代码候选；验收=golden 定位 top-5 命中真实修复行、索引构建 ≤5 分钟/仓库（EXP-05 卡片）。
+- 配置：`repo/`（tree-sitter 0.26 TS/TSX 函数级切片 + CSS 规则正则切片 + BM25Okapi + bge-m3 向量通道；分词=词元+CJK 二元组）；`agents/locator/`（三路召回 RRF 融合 k=60，每候选挂 code_span 证据）；CLI `buglens index init`；embedder=bge-m3 本地（魔搭下载 2.27GB，因 transformers CVE-2025-32434 闸门拒绝在 torch<2.6 上 torch.load pytorch_model.bin，本地转换为 safetensors 后加载，sha256 前 16 位 b5e0ce3470abf5ef 已记录，文件为 BAAI 官方发布工件）；输入=真实采集（dom.html + 含 covers 的 overlays.json）+ 已存档 v3 视觉报告（bug1/2 为 EXP-04 实测，bug3 为 EXP-02 v2 记录）。
+- 结果：
+  1. 工程验收：ruff / mypy strict / pytest **14 passed**（含切片/分词/三 bug 定位单测）全绿；
+  2. 索引：golden-1 32 切片，bge-m3 向量构建 31.5s（≤5 分钟 ✓）；
+  3. 真实定位（重采含 covers 工件）：**3/3 命中且全部 top-1、三通道全亮**——bug1 top-1=index.css:41-48（含 padding-top:12px 第 45 行，即唯一修复点）；bug2 top-1=Bug2.tsx:1-23（SKU 第 9 行）；bug3 top-1=Bug3.tsx:1-38（marginTop 第 15 行）；
+  4. covers 线索实采验证：bug1 的 overlays.json 结构化记录「navbar 覆盖层 covers=[button.btn-primary 文字=提交订单 rect=[345,37,590,48]]」——遮挡因果链的机器可读证据已闭环（v4 提示词的数据基础就绪）；
+  5. **真实运行抓出真 bug**：identifier 通道未拆分连字符类名（spec-card vs spec/card）致 bug2 首轮漏检（单测 fixture 症状文案恰含"SKU"掩盖了该问题）→ 修复=查询侧统一 tokenize → 3/3。
+- 结论：**达到成功目标，正收益**。三通道 RRF 定位在 golden-1 达到 top-1 全中；"单测过≠真实过"再次实证（fixture 过于仁慈，真实症状文案暴露缺陷）——保留教训。
+- 问题与归因：① transformers CVE 闸门 × torch<2.6：embedder 兜底最初只捕 (FileNotFound/RuntimeError/ImportError/OSError) 漏了 ValueError，导致 CLI 崩溃而非降级双通道 → 已改广谱捕获（class-D 边界放宽并注明理由）；② 免费档配额当日两次尝试均 429：bug3 VLM 补测与 v4-covered 提示词真实验证顺延至配额恢复（不阻塞定位官，其输入用存档报告）。
+- 下一步：配额恢复后跑 bug3 补测 + v4 因果验证（预期：模型应能说出「导航栏遮住提交订单按钮」）；EXP-06 修复工程师（planner+fixer，最小补丁）。
