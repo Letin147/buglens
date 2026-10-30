@@ -84,3 +84,10 @@
 - 结果与证据：门禁三绿（pytest 14 passed）；索引 32 切片/31.5s；**真实定位 3/3 全部 top-1 三通道全亮**（bug1=index.css:41-48 精确到修复行）；covers 实采=navbar→button.btn-primary"提交订单"。bug3 VLM 补测与 v4 验证仍被配额挡（两次 429），顺延。
 - 问题与坑：① transformers CVE-2025-32434 闸门：torch<2.6 拒绝 torch.load *.bin——解法=转 safetensors（safetensors.torch 需显式 import 子模块）；embedder 兜底要广谱捕获（ValueError 漏网教训）；② sentence-transformers 走 hf-mirror 会 HEAD 校验失败，改魔搭 snapshot_download 一发入魂；③ conda run 不支持多行 -c（第二次踩，已固化直调 python.exe）；④ identifier 检索必须与索引侧同构分词（连字符），fixture 别太仁慈。
 - 明日入口：配额恢复→bug3 补测+v4 因果验证；EXP-06 修复工程师（planner/fixer + 最小 diff + worktree 副本应用/回滚）。
+
+## #009 2026-10-30
+- 今日目标：bug3 补测+v4 因果验证；EXP-06 planner+fixer。
+- 做了什么：① v4 双补测完美（bug1 坐标与 covers 逐像素一致+因果正确 conf1.0；bug3 下沉描述正确）；② models 文本层（BaseLLM/complete_text/文本缓存/get_llm）；③ planner（路径归一化拒幻觉文件）+ fixer（约束编辑+worktree+回滚）+ 单测 4 个；④ 三轮真实迭代至 fixer v3（原文视图）。
+- 结果与证据：门禁三绿（mypy 30 文件/pytest 18 passed）；真实链路 **2/3 补丁生成**（bug1 +z-index:2、bug3 追加规则；bug2 唯一性守卫正确拦截 2x 片段）；原仓库文件全程未动（worktree 隔离+回滚测试）；语义有效性待 EXP-07 oracle。
+- 问题与坑：① 模型爱复述候选的 display 格式（路径带行号后缀）→ 归一化；② 模型在 JSON 字符串塞字面换行 → json.loads(strict=False)；③ 行号视图诱导复制前缀 → fixer 一律喂原文；④ 免费档窗口极短（分钟级放出 1-5 次）。
+- 明日入口：EXP-07 验证 oracle（vision/ 像素 diff+布局断言+既有测试）+ LangGraph 装配回环（fail→下一假设，≤3 次）。
