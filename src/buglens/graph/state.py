@@ -38,3 +38,29 @@ class VisualReport(BaseModel):
     model: str
 
     model_config = ConfigDict(frozen=True)
+
+
+class Hypothesis(BaseModel):
+    """One root-cause hypothesis from the planner (EXP-06)."""
+
+    id: str = Field(min_length=1)
+    root_cause: str = Field(min_length=1)
+    fix_plan: str = Field(min_length=1)
+    target_path: str = Field(min_length=1)
+    line_hint: int | None = None
+    expected_visual_change: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class Patch(BaseModel):
+    """A validated minimal patch produced by the fixer (EXP-06)."""
+
+    hypothesis_id: str
+    target_path: str
+    diff_path: Path
+    worktree_path: Path
+    edit_count: int = Field(ge=1)
+
+    model_config = ConfigDict(frozen=True)

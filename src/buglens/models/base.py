@@ -34,6 +34,16 @@ class BaseVLM(ABC):
         """Return the model's raw text answer for the given image and prompt."""
 
 
+class BaseLLM(ABC):
+    """A text-only model (planner/fixer use this; no image required)."""
+
+    name: str
+
+    @abstractmethod
+    def complete_text(self, prompt: str) -> VLMResponse:
+        """Return the model's raw text answer for the given prompt."""
+
+
 def extract_json_object(text: str) -> dict[str, Any]:
     """Best-effort extraction of the first JSON object from a model answer.
 
@@ -49,7 +59,9 @@ def extract_json_object(text: str) -> dict[str, Any]:
     if start < 0 or end <= start:
         raise VLMError(f"no JSON object found in model output: {text[:200]!r}")
     try:
-        obj = json.loads(cleaned[start : end + 1])
+        # strict=False: models put literal newlines inside multi-line edit
+        # fragments (fixer v2); JSON spec calls them invalid, we accept them.
+        obj = json.loads(cleaned[start : end + 1], strict=False)
     except json.JSONDecodeError as exc:
         raise VLMError(f"model output is not valid JSON: {exc}") from exc
     if not isinstance(obj, dict):

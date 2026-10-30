@@ -106,3 +106,19 @@ bug2（溢出类）v2 单测**命中**：symptom="文字内容（SKU编号）超
 - 结论：**达到成功目标，正收益**。三通道 RRF 定位在 golden-1 达到 top-1 全中；"单测过≠真实过"再次实证（fixture 过于仁慈，真实症状文案暴露缺陷）——保留教训。
 - 问题与归因：① transformers CVE 闸门 × torch<2.6：embedder 兜底最初只捕 (FileNotFound/RuntimeError/ImportError/OSError) 漏了 ValueError，导致 CLI 崩溃而非降级双通道 → 已改广谱捕获（class-D 边界放宽并注明理由）；② 免费档配额当日两次尝试均 429：bug3 VLM 补测与 v4-covered 提示词真实验证顺延至配额恢复（不阻塞定位官，其输入用存档报告）。
 - 下一步：配额恢复后跑 bug3 补测 + v4 因果验证（预期：模型应能说出「导航栏遮住提交订单按钮」）；EXP-06 修复工程师（planner+fixer，最小补丁）。
+
+### EXP-04 补遗：v4 因果验证与 bug3 补测（2026-10-30）
+
+配额窗口恢复后用现成 EXP-05 工件补测：**bug1 v4-covered 完美命中**——region=[345,37,590,48] 与 overlays covers 记录的按钮矩形**逐像素一致**，symptom="导航栏遮挡了'提交订单'按钮，导致按钮内容部分被截断"（因果方向正确，v3 是反的），conf=1.0/severity=high；**bug3 v4 命中**——symptom="专业版卡片垂直位置低于基础版与企业版，导致同类卡片对齐异常"（下沉描述，比 v2/v3 的"高度高于"更准确）。**遮挡类进步弧线闭环：三连漏检（v1/v2）→ 区域命中但因果反（v3）→ 因果+坐标全对（v4 covers）**。EXP-04 数据集最终 3/3。
+
+## EXP-06 修复工程师（2026-10-30）
+
+- 目标/预期指标：planner（根因假设列表，target 必须取自候选）+ fixer（约束编辑最小补丁，worktree 副本应用、原仓库不动、可回滚）；验收=补丁语法正确可 apply、改动 ≤3 处、单测全覆盖（EXP-06 卡片）。
+- 配置：models 新增文本层（BaseLLM + GLMProvider.complete_text + 文本缓存 get_text/put_text + get_llm）；planner 提示词 v1-20261030；fixer 提示词经 v1→v2→v3 三轮迭代（见下）；输入=EXP-05 真实工件 + v4/v3 真实视觉报告 + locator 重跑（全部本地）。
+- 结果（三轮真实迭代，全部如实记录）：
+  1. 第一轮（fixer v1 行号视图）：bug1 planner 429；bug2 planner 输出带行号后缀的 target_path 被严格校验拒收；bug3 planner 成功（假设方向正确）但 fixer 把多行 CSS 压成单行 0x 命中被拦；
+  2. 修复①：planner 路径归一化（剥离 `:n-n` 后缀，模型爱复述 display 格式）；修复②：JSON 解析 `strict=False`（模型在 JSON 字符串里塞字面换行）；fixer v2 多行规则；第二轮：三 planner 全通（bug1 假设 z-index 方案 conf 0.9），fixer 三连 0x——模型复制了行号前缀或凭空发明规则；
+  3. fixer v3（**喂原始文件内容，彻底去掉行号视图**）+ "old 必须原样存在"规则；第三轮：**bug1、bug3 补丁生成成功**（各 1 处编辑，diff 落盘，原文件未动）；bug2 被唯一性守卫正确拦截（`max-width: 960px;\n` 在文件中出现 2 次）——守卫即设计行为。
+- 结论：**达到成功目标（工程口径 2/3 补丁 + 守卫实证 + 单测 18 全绿），正收益**。三条硬结论：① 约束编辑（唯一精确串匹配 + 程序生成 diff）证明可行且安全——三次错误输出全部被拦，零次误改；② **不要给模型行号视图**（诱导复制前缀），精确串编辑喂原文即可；③ planner 的语义正确性不保证（bug1 z-index 方案存疑——非定位元素 z-index 无效；bug3 追加了作用于不存在类的死规则）——**这正是 EXP-07 验证 oracle + 回环的职责分工**，闭环设计被再次验证。
+- 问题与归因：配额窗口极短（第一轮 bug1 429、第三轮窗口内完成 5 次调用）；bug2 待 v4 改进项=非唯一片段自动带反馈重试（提示模型附上选择器行）。
+- 下一步：EXP-07 验证 oracle（三通道：像素 diff/布局断言/既有测试）+ LangGraph 回环（verifier fail → planner 下一假设）。
