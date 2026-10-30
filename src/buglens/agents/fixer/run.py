@@ -54,8 +54,17 @@ def run(inp: FixerInput, llm: BaseLLM) -> FixerOutput:
     response = llm.complete_text(prompt)
     raw_path = inp.artifacts_dir / f"fixer_{inp.hypothesis.id}_raw.txt"
     raw_path.write_text(response.text, encoding="utf-8")
-
-    edits = _validated_edits(extract_json_object(response.text), original)
+    try:
+        edits = _validated_edits(extract_json_object(response.text), original)
+    except EditNotUniqueError:
+        # deterministic local repair first (no API): near-miss fragments where
+        # only one line differs between old/new — the copied context may be
+        # imperfect but the intended edit line is usually exact
+        recovered = _line_level_repair(extract_json_object(response.text), original)
+        if recovered is not None:
+            edits = recovered
+        else:
+            edits = _repair_round(inp, llm, prompt, original)
     patched = original
     for old, new in edits:
         patched = patched.replace(old, new, 1)
@@ -96,6 +105,54 @@ def rollback(worktree_dir: Path) -> None:
     """Remove the worktree copy; the repository itself was never touched."""
     if worktree_dir.exists():
         shutil.rmtree(worktree_dir)
+
+
+def _repair_round(inp: FixerInput, llm: BaseLLM, prompt: str, original: str) -> list[tuple[str, str]]:
+    """One API repair round with the exact rejection reason, as last resort."""
+    repair = (
+        prompt
+        + "\n\n你上一次的 edits 被拒绝：old 与文件原文不匹配或不在文件中唯一。\n"
+        "请重新输出 JSON：old 必须逐字符从文件原文复制"
+        "（注意注释闭合符、每行缩进与行尾空格），且在文件中恰好出现一次。"
+    )
+    response = llm.complete_text(repair)
+    retry_path = inp.artifacts_dir / f"fixer_{inp.hypothesis.id}_raw_retry.txt"
+    retry_path.write_text(response.text, encoding="utf-8")
+    return _validated_edits(extract_json_object(response.text), original)
+
+
+def _line_level_repair(
+    parsed: dict[str, Any], original: str
+) -> list[tuple[str, str]] | None:
+    """When old and new differ in exactly one line, edit that line directly.
+
+    Real-run pattern (EXP-07): the model copies a whole rule as context but
+    drops a comment closer or drifts indentation — while the single changed
+    line (the property value) is byte-exact and unique in the file.
+    """
+    raw_edits = parsed.get("edits")
+    if not isinstance(raw_edits, list) or len(raw_edits) != 1:
+        return None
+    item = raw_edits[0]
+    if not isinstance(item, dict):
+        return None
+    old, new = item.get("old"), item.get("new")
+    if not isinstance(old, str) or not isinstance(new, str):
+        return None
+    old_lines, new_lines = old.splitlines(), new.splitlines()
+    if len(old_lines) != len(new_lines):
+        return None
+    diff = [i for i in range(len(old_lines)) if old_lines[i] != new_lines[i]]
+    if len(diff) != 1:
+        return None
+    k = diff[0]
+    target = old_lines[k].rstrip()
+    replacement = new_lines[k].rstrip()
+    if not target or target == replacement:
+        return None
+    if original.count(target) != 1:
+        return None
+    return [(target, replacement)]
 
 
 def _validated_edits(parsed: dict[str, Any], original: str) -> list[tuple[str, str]]:

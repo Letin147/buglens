@@ -45,6 +45,7 @@ class ReproArtifacts:
     console: Path
     har: Path
     overlays: Path
+    layout_checks: Path
     dom_sha256: str
     elapsed_s: float
 
@@ -72,6 +73,7 @@ class Reproducer:
             page.wait_for_timeout(self.profile.settle_ms)
             dom_html = page.content()
             overlays = _collect_overlays(page)
+            layout_checks = _collect_layout_checks(page)
             shot_path = run_dir / "screenshot.png"
             page.screenshot(path=str(shot_path), full_page=False)
             context.close()  # flushes the HAR
@@ -84,6 +86,10 @@ class Reproducer:
         overlays_path.write_text(
             json.dumps(overlays, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        layout_path = run_dir / "layout_checks.json"
+        layout_path.write_text(
+            json.dumps(layout_checks, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return ReproArtifacts(
             run_dir=run_dir,
             screenshot=shot_path,
@@ -91,6 +97,7 @@ class Reproducer:
             console=console_path,
             har=run_dir / "network.har",
             overlays=overlays_path,
+            layout_checks=layout_path,
             dom_sha256=hashlib.sha256(dom_html.encode("utf-8")).hexdigest(),
             elapsed_s=time.monotonic() - t0,
         )
@@ -162,6 +169,54 @@ _OVERLAYS_JS = """
   return out;
 }
 """
+
+
+_LAYOUT_JS = """
+() => {
+  const out = {overflow: [], misaligned: []};
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width >= 40 && r.height >= 8 && el.scrollWidth > el.clientWidth + 2) {
+      out.overflow.push({
+        tag: el.tagName.toLowerCase(),
+        cls: String(el.className || '').slice(0, 60),
+        text: (el.textContent || '').trim().slice(0, 40),
+        rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      });
+    }
+  }
+  const groups = new Map();
+  for (const el of document.querySelectorAll('body *')) {
+    const p = el.parentElement;
+    if (!p) continue;
+    const cls = String(el.className || '').trim().split(/\\s+/)[0];
+    if (!cls || cls.startsWith('bug')) continue;
+    const key = cls + '@' + p.tagName + ':' + String(p.className || '').trim().slice(0, 40);
+    if (!groups.has(key)) groups.set(key, []);
+    const r = el.getBoundingClientRect();
+    if (r.width >= 60 && r.height >= 40) {
+      groups.get(key).push({cls, top: Math.round(r.y), rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]});
+    }
+  }
+  for (const [key, members] of groups) {
+    if (members.length < 3) continue;
+    const tops = members.map(m => m.top);
+    const spread = Math.max(...tops) - Math.min(...tops);
+    if (spread > 24) out.misaligned.push({key, tops, spread, members: members.map(m => m.rect)});
+  }
+  return out;
+}
+"""
+
+
+def _collect_layout_checks(page: Page) -> dict[str, object]:
+    """DOM channel facts: horizontal overflow + sibling top misalignment."""
+    result: object = page.evaluate(_LAYOUT_JS)
+    return result if isinstance(result, dict) else {}
 
 
 def _collect_overlays(page: Page) -> list[dict[str, object]]:
