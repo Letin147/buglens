@@ -8,8 +8,9 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
-from buglens.models.base import BaseVLM, VLMError, VLMResponse
+from buglens.models.base import BaseLLM, BaseVLM, VLMError, VLMResponse
 from buglens.models.cache import FileCache
 from buglens.models.config import get_api_key
 
@@ -18,7 +19,7 @@ DEFAULT_MODEL = "glm-4.6v-flash"
 DEFAULT_TIMEOUT_S = 180.0
 
 
-class GLMProvider(BaseVLM):
+class GLMProvider(BaseVLM, BaseLLM):
     """Primary free-tier provider; 429s are retried with linear backoff."""
 
     def __init__(
@@ -39,39 +40,34 @@ class GLMProvider(BaseVLM):
             hit = self.cache.get(image, prompt)
             if hit is not None:
                 return hit
-        response = self._call_with_retry(image, prompt)
+        response = self._call_with_retry(_vision_body(image, prompt))
         if isinstance(self.cache, FileCache):
             self.cache.put(image, prompt, response)
         return response
 
-    def _call_with_retry(self, image: Path, prompt: str) -> VLMResponse:
+    def complete_text(self, prompt: str) -> VLMResponse:
+        if isinstance(self.cache, FileCache):
+            hit = self.cache.get_text(prompt)
+            if hit is not None:
+                return hit
+        response = self._call_with_retry(_text_body(prompt))
+        if isinstance(self.cache, FileCache):
+            self.cache.put_text(prompt, response)
+        return response
+
+    def _call_with_retry(self, body: dict[str, Any]) -> VLMResponse:
         last_error: Exception | None = None
         for attempt in range(1, self.retries + 1):
             try:
-                return self._call(image, prompt)
+                return self._call(body)
             except _RateLimited as exc:
                 last_error = exc
                 if attempt < self.retries:
                     time.sleep(self.retry_wait_s * attempt)
         raise VLMError(f"GLM rate-limited after {self.retries} attempts") from last_error
 
-    def _call(self, image: Path, prompt: str) -> VLMResponse:
+    def _call(self, body: dict[str, Any]) -> VLMResponse:
         api_key = get_api_key("BUGLENS_GLM_API_KEY")
-        body = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": _data_url(image)},
-                        },
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ],
-        }
         request = urllib.request.Request(  # noqa: S310 - fixed https endpoint
             ENDPOINT,
             data=json.dumps(body).encode("utf-8"),
@@ -109,3 +105,25 @@ class _RateLimited(Exception):
 def _data_url(image: Path) -> str:
     encoded = base64.b64encode(image.read_bytes()).decode()
     return f"data:image/png;base64,{encoded}"
+
+
+def _vision_body(image: Path, prompt: str) -> dict[str, Any]:
+    return {
+        "model": DEFAULT_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": _data_url(image)}},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+    }
+
+
+def _text_body(prompt: str) -> dict[str, Any]:
+    return {
+        "model": DEFAULT_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+    }

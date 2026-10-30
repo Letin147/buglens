@@ -48,3 +48,33 @@ class FileCache:
         )
         payload = json.dumps(asdict(fresh), ensure_ascii=False, indent=2)
         self._path(self._key(image, prompt)).write_text(payload, encoding="utf-8")
+
+    # text-only entries (planner/fixer prompts have no image)
+
+    def _text_path(self, prompt: str) -> Path:
+        key = hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:32]
+        return self.root / f"text-{key}.json"
+
+    def get_text(self, prompt: str) -> VLMResponse | None:
+        path = self._text_path(prompt)
+        if not path.exists():
+            return None
+        response = VLMResponse(**json.loads(path.read_text(encoding="utf-8")))
+        return VLMResponse(
+            text=response.text,
+            elapsed_s=response.elapsed_s,
+            total_tokens=response.total_tokens,
+            cached=True,
+        )
+
+    def put_text(self, prompt: str, response: VLMResponse) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        fresh = VLMResponse(
+            text=response.text,
+            elapsed_s=response.elapsed_s,
+            total_tokens=response.total_tokens,
+            cached=False,
+        )
+        self._text_path(prompt).write_text(
+            json.dumps(asdict(fresh), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
