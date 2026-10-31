@@ -105,3 +105,10 @@
 - 结果与证据：**bug2 真修复 PASS**（overflow-wrap: anywhere 四通道绿，溢出实测消除）；bug3 首轮 CSS margin-top no-op（内联 style 优先级实证）后配额 429×3 耗尽——**M0 = 2/3**（bug1 padding-top / bug2 overflow-wrap 均 oracle 四通道验证）；bug3 正确修法已入 v3.1 模式库，待配额。
 - 问题与坑：① 模型输出 line_hint 为字符串区间（"121-124"）曾静默丢弃正确假设——宽容转换；② 内联 style > CSS 类选择器：对 style={{marginTop:56}} 加类级 margin-top:0 实测零变化（通用 CSS 规律，已入模式库）；③ 本机 ugrep 别名会干扰管道 grep，直接 cat 文件更稳。
 - 明日入口：配额恢复跑 bug3（预期 v3.1 模式→JSX 内联修改→PASS→M0 3/3）；EXP-08 证据链 Store+critic+reporter；github 443 恢复后补推 exp/EXP-07-verifier。
+
+## #012 2026-10-30
+- 今日目标：EXP-08 证据链+critic+reporter；bug3 配额重试。
+- 做了什么：EvidenceStore（内容寻址/manifest 只增）；规则式非对称 critic；硬约束 reporter；builder 集成 critic→reporter；单测 +4（28 全绿）；真实生成 bug1/bug2 两份 PR_REPORT.md；后台 25 分钟后重试 bug3。
+- 结果与证据：bug1/bug2 报告证据链四行全部指向磁盘真实工件；硬约束双实证（单测+e2e）；bug3 重试仍 FAIL（三假设全 CSS）——M0=2/3。
+- 问题与坑：① 测试夹具同目录同名文件互相覆盖会制造"假 bug"（critic 解析误报的真相）——夹具文件名必须唯一；② planner 同轮假设文件同质化是 bug3 收敛瓶颈（改进项：多样性约束）。
+- 明日入口：planner 假设文件多样性约束 → bug3 → M0 3/3；EXP-09（CLI/降级链/PyPI 0.1.0）；github 443 恢复后补推 exp/EXP-07-verifier（含本卷全部新提交）。
