@@ -98,3 +98,10 @@
 - 结果与证据：**bug1 真修复 PASS（padding-top 12→64，round0 收敛，像素 43.6%+无遮挡）**；bug2/bug3 在新增 DOM 断言下正确 FAIL（溢出 755>298；错位 spread=56px）——初版 oracle 曾对二者假阳性，已堵死。24 tests 全绿。两次关键自查：verifier worktree 根少一层目录（假验证）；像素"有变化"放行无效补丁。
 - 问题与坑：① oracle 自身必须被独立核验（检查 patched_repo 内文件内容），否则"假验证"与"假复现"同样致命；② 确定性本地修复优先于 API 重试（行级修复器零成本救活 padding 类补丁）；③ planner 反馈轮输出噪声是回环收敛瓶颈。
 - 明日入口：EXP-08 证据链 Store+Reporter；planner 强化（错位模板/schema 约束）后补跑 bug2/3 至 M0 验收。
+
+## #011 2026-10-30
+- 今日目标：planner 强化 → M0 补跑。
+- 做了什么：planner v3/v3.1 修复模式库（三条实测 no-op 定律入提示词）+ line_hint 宽容转换；fixer JSON 语法坏修复分支（引号转义指令）；图防御（fixer 对空 hypotheses 的 KeyError）。
+- 结果与证据：**bug2 真修复 PASS**（overflow-wrap: anywhere 四通道绿，溢出实测消除）；bug3 首轮 CSS margin-top no-op（内联 style 优先级实证）后配额 429×3 耗尽——**M0 = 2/3**（bug1 padding-top / bug2 overflow-wrap 均 oracle 四通道验证）；bug3 正确修法已入 v3.1 模式库，待配额。
+- 问题与坑：① 模型输出 line_hint 为字符串区间（"121-124"）曾静默丢弃正确假设——宽容转换；② 内联 style > CSS 类选择器：对 style={{marginTop:56}} 加类级 margin-top:0 实测零变化（通用 CSS 规律，已入模式库）；③ 本机 ugrep 别名会干扰管道 grep，直接 cat 文件更稳。
+- 明日入口：配额恢复跑 bug3（预期 v3.1 模式→JSX 内联修改→PASS→M0 3/3）；EXP-08 证据链 Store+critic+reporter；github 443 恢复后补推 exp/EXP-07-verifier。

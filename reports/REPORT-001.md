@@ -137,3 +137,7 @@ bug2（溢出类）v2 单测**命中**：symptom="文字内容（SKU编号）超
 - 结论：**部分达标，正收益**。核心价值：① 可执行 oracle 对遮挡/溢出/错位三类缺陷全部有机器断言（学术核心主张落地）；② 回环收敛性实证（bug1 round0）+ 拒绝能力实证（bug2/3）；③ 三条新工程定律：oracle 自身须被独立核验（假复现的姊妹篇：**假验证**）；"像素有变化"≠"缺陷消除"，必须配 DOM 级缺陷断言；模型输出失配时先做确定性本地修复（行级）再花 API。
 - 问题与归因：bug2/3 未收敛主因=planner 在反馈轮的输出噪声（路径格式复述/无效 JSON）+ 免费档配额，改进项：planner 输出 schema 约束强化、错位类假设模板（sibling 对齐修复模式）注入。
 - 下一步：EXP-08 证据链 Store + Reporter（PR 渲染）；M0 验收补跑（bug2/3 收敛）排在 planner 强化之后。
+
+### EXP-07 增补：planner 模式库与 M0 进度（2026-10-30）
+
+planner 升级 v3-patterns→v3.1-inline：注入三类缺陷修复模式库（遮挡→padding-top≥覆盖层；溢出→overflow-wrap:anywhere；错位→恢复异常成员样式，**内联 style 优先级高于 CSS 类，必须改 JSX 本体**——三条⚠修法均为 oracle 实测证伪的 no-op）；line_hint 宽容转换（模型输出 "121-124" 字符串曾致正确假设被弃）；fixer 对 JSON 语法坏（未转义引号）增加修复分支。**结果：bug2 真修复 PASS**（`+overflow-wrap: anywhere;`，四通道全绿，DOM 溢出实测消除）——从 EXP-06 假阳性 → EXP-07 诚实 FAIL → 模式库真修复的完整弧线。bug3 首轮 no-op（CSS margin-top 对内联 style 无效，实证模式库⚠条款）后配额耗尽（429×3），**M0 进度 2/3**；bug3 正确修法（改 Bug3.tsx 内联 marginTop）已编码进 v3.1 模式，配额恢复即可收敛。图卫生补丁：planner 失败缺 hypotheses 时 fixer 防御（KeyError 修复）。
