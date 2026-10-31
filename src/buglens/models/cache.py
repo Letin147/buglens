@@ -10,8 +10,24 @@ from pathlib import Path
 from buglens.models.base import VLMResponse
 
 
+def _pixel_bytes(image: Path) -> bytes:
+    """Canonical cache key input: decoded RGB pixels, not raw PNG bytes.
+
+    Chromium PNG encoding is not byte-deterministic across runs (measured:
+    identical pixels, different sha256) — keying on bytes missed the cache
+    and burned quota on every re-capture (EXP-09 real-run finding).
+    """
+    try:
+        from PIL import Image
+
+        with Image.open(image) as im:
+            return im.convert("RGB").tobytes()
+    except Exception:  # noqa: BLE001 — non-image or missing PIL: fall back
+        return image.read_bytes()
+
+
 class FileCache:
-    """Flat-file cache under a root dir; keys are sha256(image_bytes + prompt)."""
+    """Flat-file cache under a root dir; keys are sha256(pixels + prompt)."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -21,7 +37,7 @@ class FileCache:
 
     def _key(self, image: Path, prompt: str) -> str:
         digest = hashlib.sha256()
-        digest.update(image.read_bytes())
+        digest.update(_pixel_bytes(image))
         digest.update(prompt.encode("utf-8"))
         return digest.hexdigest()[:32]
 

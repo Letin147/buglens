@@ -96,6 +96,7 @@ def run(inp: PlannerInput, llm: BaseLLM) -> PlannerOutput:
     if not hypotheses:
         raise VLMError("planner produced no valid hypothesis targeting the candidates")
 
+    hypotheses = _diversify_by_file(hypotheses)
     evidence = [
         Evidence(
             kind="model_output",
@@ -106,6 +107,22 @@ def run(inp: PlannerInput, llm: BaseLLM) -> PlannerOutput:
         )
     ]
     return PlannerOutput(hypotheses=hypotheses, evidence=evidence)
+
+
+def _diversify_by_file(hypotheses: list[Hypothesis]) -> list[Hypothesis]:
+    """Keep the best hypothesis per target file (EXP-09: M0/bug3 blocker).
+
+    Real-run finding: all three hypotheses targeted the same CSS file while
+    the defect lived in a JSX inline style on the top-1 candidate file —
+    one-file monoculture starves the retry rotation. Best-per-file by
+    confidence, overall order by confidence, cap 3.
+    """
+    best_per_file: dict[str, Hypothesis] = {}
+    for h in hypotheses:
+        current = best_per_file.get(h.target_path)
+        if current is None or h.confidence > current.confidence:
+            best_per_file[h.target_path] = h
+    return sorted(best_per_file.values(), key=lambda h: h.confidence, reverse=True)[:3]
 
 
 def _normalize_path(path: str) -> str:

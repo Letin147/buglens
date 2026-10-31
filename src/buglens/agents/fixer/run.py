@@ -66,9 +66,22 @@ def run(inp: FixerInput, llm: BaseLLM) -> FixerOutput:
         else:
             edits = _repair_round(inp, llm, prompt, original)
     except VLMError:
-        # malformed JSON (e.g. unescaped quotes inside strings) or no edits:
-        # straight to one API repair round (EXP-07 real-run finding)
-        edits = _repair_round(inp, llm, prompt, original)
+        # malformed JSON: first try deterministic salvage of unescaped quotes
+        # (models embed JSX className="..." inside strings), then one API round
+        salvaged = _salvage_edits(response.text)
+        if salvaged is not None:
+            try:
+                edits = _validated_edits(salvaged, original)
+            except EditNotUniqueError:
+                # salvaged multi-line block may still miss context: fall back
+                # to the single-differing-line repair before spending API
+                recovered = _line_level_repair(salvaged, original)
+                if recovered is not None:
+                    edits = recovered
+                else:
+                    edits = _repair_round(inp, llm, prompt, original)
+        else:
+            edits = _repair_round(inp, llm, prompt, original)
     patched = original
     for old, new in edits:
         patched = patched.replace(old, new, 1)
@@ -123,6 +136,54 @@ def _repair_round(inp: FixerInput, llm: BaseLLM, prompt: str, original: str) -> 
     retry_path = inp.artifacts_dir / f"fixer_{inp.hypothesis.id}_raw_retry.txt"
     retry_path.write_text(response.text, encoding="utf-8")
     return _validated_edits(extract_json_object(response.text), original)
+
+
+def _salvage_edits(text: str) -> dict[str, Any] | None:
+    """Deterministic salvage of {"edits":[{"old":..,"new":..}]} with unescaped
+    quotes inside string values (EXP-09 real-run blocker: models embed JSX
+    className="..." and no amount of prompting reliably escapes them).
+
+    A value's closing quote is the one followed by optional whitespace and a
+    structural character (, } ]); inner quotes fail that lookahead.
+    """
+    import re
+
+    def scan_value(src: str, start: int) -> tuple[str, int] | None:
+        if start >= len(src) or src[start] != '"':
+            return None
+        i = start + 1
+        out: list[str] = []
+        while i < len(src):
+            ch = src[i]
+            if ch == "\\" and i + 1 < len(src):
+                nxt = src[i + 1]
+                out.append({"n": "\n", "t": "\t", '"': '"', "\\": "\\"}.get(nxt, nxt))
+                i += 2
+                continue
+            if ch == '"' and re.match(r'\s*[,\}\]]', src[i + 1 :]):
+                return "".join(out), i + 1
+            out.append(ch)
+            i += 1
+        return None
+
+    def find_value(src: str, key: str) -> tuple[str, int] | None:
+        marker = f'"{key}"'
+        pos = src.find(marker)
+        if pos < 0:
+            return None
+        i = pos + len(marker)
+        while i < len(src) and src[i] in " \t\r\n:":
+            i += 1
+        return scan_value(src, i)
+
+    edits: list[dict[str, str]] = []
+    block = text[text.find("{") : text.rfind("}") + 1] if "{" in text else text
+    old = find_value(block, "old")
+    new = find_value(block, "new")
+    if old is None or new is None:
+        return None
+    edits.append({"old": old[0], "new": new[0]})
+    return {"edits": edits}
 
 
 def _line_level_repair(
