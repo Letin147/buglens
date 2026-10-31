@@ -13,14 +13,19 @@ from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from buglens.agents.critic import CriticInput
+from buglens.agents.critic import run as critic_run
 from buglens.agents.fixer import EditNotUniqueError, FixerInput
 from buglens.agents.fixer import run as fixer_run
 from buglens.agents.locator.run import LocatorInput
 from buglens.agents.locator.run import run as locator_run
 from buglens.agents.planner import PlannerInput
 from buglens.agents.planner import run as planner_run
+from buglens.agents.reporter import ReporterInput
+from buglens.agents.reporter import run as reporter_run
 from buglens.agents.verifier.run import Verdict, VerifyInput, VerifyOutput
 from buglens.agents.verifier.run import run as verify_run
+from buglens.evidence.store import EvidenceGapError
 from buglens.graph.state import Evidence, Hypothesis, Patch, VisualReport
 from buglens.models.base import BaseLLM, VLMError
 from buglens.repo.embedder import Embedder
@@ -33,13 +38,16 @@ class PipelineState(TypedDict, total=False):
     report: VisualReport
     candidates: list[Any]
     hypotheses: list[Hypothesis]
+    final_hypothesis: Hypothesis | None
     patch: Patch | None
     verdict: Verdict | None
+    after_screenshot: Path | None
     passed: bool
     retries: int
     failure_notes: list[str]
     tried_summary: str
     evidence: list[Evidence]
+    report_path: Path | None
     error: str
 
 
@@ -119,7 +127,8 @@ def build_pipeline(deps: PipelineDeps) -> Any:
             notes.append(f"修复生成失败：{exc}")
             # clear the stale patch: the verifier must never re-judge an old one
             return {**state, "patch": None, "failure_notes": notes, "passed": False}
-        return {**state, "patch": out.patch, "evidence": _merge(state, out.evidence)}
+        return {**state, "patch": out.patch, "final_hypothesis": hypothesis,
+                "evidence": _merge(state, out.evidence)}
 
     def verifier_node(state: PipelineState) -> PipelineState:
         retries = state.get("retries", 0)
@@ -141,13 +150,59 @@ def build_pipeline(deps: PipelineDeps) -> Any:
             **state,
             "passed": out.verdict.passed,
             "verdict": out.verdict,
+            "after_screenshot": out.after_screenshot,
             "failure_notes": notes if not out.verdict.passed else [],
             "evidence": _merge(state, out.evidence),
         }
 
+    def critic_node(state: PipelineState) -> PipelineState:
+        patch = state.get("patch")
+        verdict = state.get("verdict")
+        if patch is None or verdict is None:
+            return {**state, "error": state.get("error") or "critic: nothing to review"}
+        out = critic_run(CriticInput(patch=patch, verdict=verdict, evidence=state.get("evidence", [])))
+        if out.approved:
+            return state
+        notes = list(state.get("failure_notes", [])) + [
+            f"审查否决：{reason}" for reason in out.reasons
+        ]
+        return {**state, "passed": False, "failure_notes": notes}
+
+    def reporter_node(state: PipelineState) -> PipelineState:
+        patch = state.get("patch")
+        verdict = state.get("verdict")
+        hypothesis = state.get("final_hypothesis")
+        after = state.get("after_screenshot")
+        if patch is None or verdict is None or hypothesis is None or after is None:
+            return {**state, "error": state.get("error") or "reporter: incomplete state"}
+        out_path = deps.artifacts_root / "PR_REPORT.md"
+        try:
+            path = reporter_run(
+                ReporterInput(
+                    report=state["report"],
+                    hypothesis=hypothesis,
+                    patch=patch,
+                    verdict=verdict,
+                    evidence=state.get("evidence", []),
+                    before_png=deps.capture_dir / "screenshot.png",
+                    after_png=after,
+                    out_path=out_path,
+                )
+            )
+        except EvidenceGapError as exc:
+            return {**state, "error": f"reporter: {exc}"}
+        return {**state, "report_path": path}
+
     def route_after_verifier(state: PipelineState) -> str:
+        if state.get("error") or not state.get("passed"):
+            if state.get("retries", 0) + 1 >= MAX_RETRIES:
+                return "end"
+            return "retry"
+        return "critic"
+
+    def route_after_critic(state: PipelineState) -> str:
         if state.get("error") or state.get("passed"):
-            return "end"
+            return "reporter"
         if state.get("retries", 0) + 1 >= MAX_RETRIES:
             return "end"
         return "retry"
@@ -160,12 +215,20 @@ def build_pipeline(deps: PipelineDeps) -> Any:
     graph.add_node("planner", planner_node)
     graph.add_node("fixer", fixer_node)
     graph.add_node("verifier", verifier_node)
+    graph.add_node("critic", critic_node)
+    graph.add_node("reporter", reporter_node)
     graph.add_node("retry", retry_node)
     graph.add_edge(START, "locator")
     graph.add_edge("locator", "planner")
     graph.add_edge("planner", "fixer")
     graph.add_edge("fixer", "verifier")
-    graph.add_conditional_edges("verifier", route_after_verifier, {"retry": "retry", "end": END})
+    graph.add_conditional_edges(
+        "verifier", route_after_verifier, {"retry": "retry", "critic": "critic", "end": END}
+    )
+    graph.add_conditional_edges(
+        "critic", route_after_critic, {"retry": "retry", "reporter": "reporter", "end": END}
+    )
+    graph.add_edge("reporter", END)
     graph.add_edge("retry", "planner")
     return graph.compile()
 
