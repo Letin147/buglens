@@ -85,7 +85,7 @@ def run(inp: PlannerInput, llm: BaseLLM) -> PlannerOutput:
                 root_cause=str(item["root_cause"]),
                 fix_plan=str(item["fix_plan"]),
                 target_path=target,
-                line_hint=item.get("line_hint"),
+                line_hint=_coerce_line_hint(item.get("line_hint")),
                 expected_visual_change=str(item["expected_visual_change"]),
                 confidence=float(item["confidence"]),
             )
@@ -116,7 +116,7 @@ def _normalize_path(path: str) -> str:
 def _match_allowed_path(target: str, allowed: set[str]) -> str | None:
     """Canonicalize noisy model output to one of the candidate paths.
 
-    Seen in the wild (EXP-07 real run): "src/x.css:41-48", "src/x.css:41-48 |
+    Seen in the wild (EXP-07 real runs): "src/x.css:41-48", "src/x.css:41-48 |
     .rule-name". Accept prefix matches on any allowed path; reject everything
     else so hallucinated files never reach the fixer.
     """
@@ -127,6 +127,18 @@ def _match_allowed_path(target: str, allowed: set[str]) -> str | None:
     head = re.split(r"[|\s]", t, maxsplit=1)[0]
     head = _normalize_path(head)
     return head if head in allowed else None
+
+
+def _coerce_line_hint(value: object) -> int | None:
+    """line_hint arrives as int, null, or strings like "121-124" (v3 real run)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    match = re.search(r"\d+", str(value))
+    return int(match.group(0)) if match else None
 
 
 def _read_console(console_path: Path | None) -> str:

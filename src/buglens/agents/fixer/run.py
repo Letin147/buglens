@@ -65,6 +65,10 @@ def run(inp: FixerInput, llm: BaseLLM) -> FixerOutput:
             edits = recovered
         else:
             edits = _repair_round(inp, llm, prompt, original)
+    except VLMError:
+        # malformed JSON (e.g. unescaped quotes inside strings) or no edits:
+        # straight to one API repair round (EXP-07 real-run finding)
+        edits = _repair_round(inp, llm, prompt, original)
     patched = original
     for old, new in edits:
         patched = patched.replace(old, new, 1)
@@ -111,9 +115,9 @@ def _repair_round(inp: FixerInput, llm: BaseLLM, prompt: str, original: str) -> 
     """One API repair round with the exact rejection reason, as last resort."""
     repair = (
         prompt
-        + "\n\n你上一次的 edits 被拒绝：old 与文件原文不匹配或不在文件中唯一。\n"
-        "请重新输出 JSON：old 必须逐字符从文件原文复制"
-        "（注意注释闭合符、每行缩进与行尾空格），且在文件中恰好出现一次。"
+        + "\n\n你上一次的输出被拒绝（old 与文件原文不匹配/不唯一，或 JSON 无法解析）。\n"
+        "请重新输出 JSON：old 必须逐字符从文件原文复制（注意注释闭合符、每行缩进与行尾空格），"
+        "且在文件中恰好出现一次；JSON 字符串值内部的双引号必须写成 \\\" 转义、换行写成 \\n。"
     )
     response = llm.complete_text(repair)
     retry_path = inp.artifacts_dir / f"fixer_{inp.hypothesis.id}_raw_retry.txt"

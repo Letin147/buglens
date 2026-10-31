@@ -97,8 +97,12 @@ def build_pipeline(deps: PipelineDeps) -> Any:
                 "evidence": _merge(state, out.evidence)}
 
     def fixer_node(state: PipelineState) -> PipelineState:
-        hypotheses = state["hypotheses"]
+        hypotheses = state.get("hypotheses") or []
         retries = state.get("retries", 0)
+        if not hypotheses:
+            # planner errored (e.g. quota) or produced nothing usable
+            return {**state, "passed": False, "patch": None,
+                    "error": state.get("error") or "planner produced no hypotheses"}
         hypothesis = hypotheses[min(retries, len(hypotheses) - 1)]
         try:
             out = fixer_run(
