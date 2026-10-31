@@ -119,3 +119,10 @@
 - 结果与证据：PR#4 合并（27dde52）；CI 曾红 8s（test_exp08 跨文件导入的 ruff 版本分组分歧）→ 热修 57954bf（测试自包含化）→ main CI 绿（23s，28 tests）。
 - 问题与坑：**流程违规自查**：我在 `gh pr checks` 尚未返回时就执行了 merge --admin，导致红的 CI 被绕过（违反 E05"CI 红=事故"与 8.4 纪律）。教训入制度：merge 命令必须以 `gh pr checks --fail-fast` 通过为前置条件，admin 绕过仅用于修复后放行，不用于抢先合并；跨文件测试夹具导入在 ruff 版本间排序分歧——测试文件自包含。
 - 明日入口：planner 假设文件多样性约束 → bug3 → M0 3/3；EXP-09（CLI 打磨/降级演练/PyPI 0.1.0，W6）。
+
+## #014 2026-10-31
+- 今日目标：EXP-09 CLI+降级；M0 收口；全库审计。
+- 做了什么：planner 文件多样性后过滤+配额复用；fixer 打捞解析器（容忍 JSX 未转义引号）+打捞后行级兜底；像素阈值校准 0.5%；`buglens fix` CLI+full_pipeline；审计（密钥0/作者/卫生）。
+- 结果与证据：**M0 3/3**（bug1 padding-top / bug2 overflow-wrap / bug3 移除内联 marginTop，均四通道验证）；CLI 真实 PASS+自动报告零 API；30 tests/mypy/ruff 绿。**审计发现**：4 个服务器端 merge commit 用了学校邮箱（gh 网页合并身份）——待本 PR 合并后统一重写历史并强推脱敏；今后 merge 一律 `--rebase` 模式。
+- 问题与坑：① PNG 字节级非确定（像素一致 sha 不同）→ 缓存用像素哈希；② `#/` 开头参数会被 MSYS 转换 → MSYS_NO_PATHCONV=1；③ vite 端口须 CLI 覆盖。
+- 明日入口：历史脱敏重写+强推；EXP-10 GitHub Action；PyPI 0.1.0（待账号）。

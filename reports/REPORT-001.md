@@ -154,3 +154,17 @@ planner 升级 v3-patterns→v3.1-inline：注入三类缺陷修复模式库（�
 - 结论：**达到成功目标，正收益**。证据链闭环（§9）从模型层落到工件层；暴露的下一改进点明确：planner 假设需"候选文件多样性"约束（同轮假设应覆盖候选中不同文件），预计可解锁 bug3。
 - 问题与归因：测试夹具文件名撞车（p.diff 双写）导致的假失败一次（已修）；critic diff 头解析对 "--- a/" 行误切一次（已修）——两处均被单测即时抓获。
 - 下一步：planner 多样性约束 → bug3 补跑 → M0 3/3 收口；EXP-09 CLI 打磨+降级+发布 v0.1.0（W6）。
+
+## EXP-09 CLI 全流程命令与降级演练（2026-10-31）
+
+- 目标/验收：`buglens fix` 一条命令端到端（capture→分析→定位→修复→验证→报告）；限额/断网降级不崩溃（EXP-09 卡片）。
+- 配置：`graph/full_pipeline.py`（assembly 层编排）；CLI `buglens fix REPO --fragment --port --out`；缓存根统一 `temp/cache/vlm`。
+- 结果（真实运行三轮迭代，全部如实记录）：
+  1. **首轮暴露两个真 bug**：① Git Bash 对 `#/bug3` 参数做 MSYS 路径转换（须 `MSYS_NO_PATHCONV=1`）；② vite.config 钉死 5173 而 launcher 等 5199 → 超时（原服务器启动也要 `-- --port` 覆盖）；
+  2. **二轮暴露缓存体系真 bug**：Chromium PNG 编码跨运行**字节级非确定**（像素 SSIM=1.0 但 sha256 不同）→ 缓存键改为**解码后 RGB 像素哈希**；同轮发现 fix-run 用独立空缓存目录白白烧掉配额窗口 → 统一缓存根；轮换指针缺陷：早轮 planner 夭折后 `hypotheses[min(retries,…)]` 直接跳过正确假设 → 引入独立 `hypothesis_idx`；
+  3. **三轮验收 PASS**：`buglens fix examples/golden-1 --fragment "#/bug3" --port 5199` → **四通道全绿 + PR_REPORT.md 自动生成，全程零 API（像素键缓存全命中）**；
+  4. 降级演练双证：DeadVLM 单测（VLMError 契约）+ 真实限额轮（CLI 受控 FAIL 退出码 2、原因与失败证据打印、无崩溃）；
+  5. **M0 正式 3/3**：bug3 闭环在多样性约束+打捞解析器+像素阈值校准（2%→0.5%，实测 no-op 恒 0.0%、真修复最低 1.9%）三件套下收敛，补丁=移除内联 `marginTop: 56`（教科书修复）。
+- 结论：**达到成功目标，正收益**。三条新定律：PNG 字节不可作缓存键（用像素）；缓存目录必须全局唯一；假设轮换指针须独立于重试计数。
+- 问题与归因：无遗留（PyPI 0.1.0 发布属 W6 后半段，待用户 PyPI 账号，顺延）。
+- 下一步：EXP-10 GitHub Action（W7）；M1 验收（真实仓库演练）。
