@@ -123,3 +123,34 @@ bug2（溢出类）v2 单测**命中**：symptom="文字内容（SKU编号）超
 - 结论：**达到成功目标（工程口径 2/3 补丁 + 守卫实证 + 单测 18 全绿），正收益**。三条硬结论：① 约束编辑（唯一精确串匹配 + 程序生成 diff）证明可行且安全——三次错误输出全部被拦，零次误改；② **不要给模型行号视图**（诱导复制前缀），精确串编辑喂原文即可；③ planner 的语义正确性不保证（bug1 z-index 方案存疑——非定位元素 z-index 无效；bug3 追加了作用于不存在类的死规则）——**这正是 EXP-07 验证 oracle + 回环的职责分工**，闭环设计被再次验证。
 - 问题与归因：配额窗口极短（第一轮 bug1 429、第三轮窗口内完成 5 次调用）；bug2 待 v4 改进项=非唯一片段自动带反馈重试（提示模型附上选择器行）。
 - 下一步：EXP-07 验证 oracle（三通道：像素 diff/布局断言/既有测试）+ LangGraph 回环（verifier fail → planner 下一假设）。
+
+## EXP-07 验证 oracle 与回环（2026-10-30）
+
+- 目标/预期指标：三通道可执行 oracle（像素 diff/布局断言/既有测试）+ LangGraph 回环（fail→下一轮规划，≤3 次），使语义正确性由机器判定而非模型自评。
+- 配置：`vision/`（region_change_ratio 区域变化率 + covers 遮挡重算 + layout_defects 溢出/错位 DOM 断言）；`repro/patched_env.py`（副本仓库 copytree + node_modules junction + 动态端口）；`agents/verifier/`（四通道 Verdict：pixel/layout/dom/tests）；planner v2-feedback（失败证据+已试假设入提示词、JSON 自修复重试、候选路径前缀匹配）；fixer 增强（行级确定性修复器 + 带错 API 重试）；`graph/builder.py`（LangGraph：locator→planner→fixer→verifier，fail且<3→retry→planner，fixer 失败清空 stale patch）。
+- 结果（真实运行，含两次关键自查纠错）：
+  1. **oracle 判定链路全程可执行**：verdict 的每个结论都来自重渲染后的可复算证据（像素比率/DOM 几何），无一处模型自评；
+  2. **自查发现 verifier 致命 bug**：worktree 根路径推导少了一层目录（补丁被 overlay 到 patched_repo 根而非 src/ 下），**此前所有 verify 判的都是未打补丁的渲染**——修复后 bug1 立即在 round0 收敛：PASS（像素 43.6%+无遮挡），最终补丁 `padding-top: 12px→64px`（教科书修复）；教训：oracle 自己也必须被验证（本轮用 patched_repo 内文件内容核验抓出）；
+  3. **堵住两类假阳性**：初版像素通道"有变化即过"放行了 bug2（max-width 1200）与 bug3（整页上移 32px）的无效补丁——新增 DOM 断言后：bug2 正确 FAIL（溢出实测 scrollWidth=755>clientWidth=298）、bug3 正确 FAIL（兄弟组 spread=56px 顶边不对齐）；
+  4. **最终格局：golden 1/3 真修复 PASS（bug1）；2/3 诚实 FAIL**（回环 2 轮内 planner 未产出有效新假设/配额受限）——M0 的 golden 3/3 未达，但 oracle 不放行未修复缺陷的可靠性优先于凑通过率；
+  5. 工程验收：单测 24 passed（含坏补丁→重试→好补丁回环、3 次封顶、行级修复、DOM 断言）；ruff/mypy 绿。
+- 结论：**部分达标，正收益**。核心价值：① 可执行 oracle 对遮挡/溢出/错位三类缺陷全部有机器断言（学术核心主张落地）；② 回环收敛性实证（bug1 round0）+ 拒绝能力实证（bug2/3）；③ 三条新工程定律：oracle 自身须被独立核验（假复现的姊妹篇：**假验证**）；"像素有变化"≠"缺陷消除"，必须配 DOM 级缺陷断言；模型输出失配时先做确定性本地修复（行级）再花 API。
+- 问题与归因：bug2/3 未收敛主因=planner 在反馈轮的输出噪声（路径格式复述/无效 JSON）+ 免费档配额，改进项：planner 输出 schema 约束强化、错位类假设模板（sibling 对齐修复模式）注入。
+- 下一步：EXP-08 证据链 Store + Reporter（PR 渲染）；M0 验收补跑（bug2/3 收敛）排在 planner 强化之后。
+
+### EXP-07 增补：planner 模式库与 M0 进度（2026-10-30）
+
+planner 升级 v3-patterns→v3.1-inline：注入三类缺陷修复模式库（遮挡→padding-top≥覆盖层；溢出→overflow-wrap:anywhere；错位→恢复异常成员样式，**内联 style 优先级高于 CSS 类，必须改 JSX 本体**——三条⚠修法均为 oracle 实测证伪的 no-op）；line_hint 宽容转换（模型输出 "121-124" 字符串曾致正确假设被弃）；fixer 对 JSON 语法坏（未转义引号）增加修复分支。**结果：bug2 真修复 PASS**（`+overflow-wrap: anywhere;`，四通道全绿，DOM 溢出实测消除）——从 EXP-06 假阳性 → EXP-07 诚实 FAIL → 模式库真修复的完整弧线。bug3 首轮 no-op（CSS margin-top 对内联 style 无效，实证模式库⚠条款）后配额耗尽（429×3），**M0 进度 2/3**；bug3 正确修法（改 Bug3.tsx 内联 marginTop）已编码进 v3.1 模式，配额恢复即可收敛。图卫生补丁：planner 失败缺 hypotheses 时 fixer 防御（KeyError 修复）。
+
+## EXP-08 证据链 Store、非对称 Critic 与 Reporter（2026-10-30）
+
+- 目标/验收：内容寻址证据 Store；critic 非对称审查（只读工件不读自述）；reporter 以"断言-证据硬约束"渲染 PR 报告（缺证据必须渲染失败）；golden 报告文件生成（EXP-08 卡片）。
+- 配置：`evidence/store.py`（ev-{sha8}-{kind} 内容寻址去重、manifest.jsonl 只增）；`agents/critic/`（规则式非对称审查 MVP：diff 仅触目标文件/verdict 全过/edit≤3/证据非空——偏离卡片的 LLM critic 已记录：零配额、全可审计，LLM 版可后置叠加）；`agents/reporter/`（REQUIRED_KINDS={screenshot,render_diff,diff} + 工件存在性双检 → EvidenceGapError；报告含概述/根因/补丁/四通道表/前后对比/证据链表/S03 声明）；builder 集成 verifier-pass→critic→（通过→reporter→END / 否决→retry）。
+- 结果：
+  1. 工程验收：pytest **28 passed**（store 去重与清单追加、critic 通过/否决/多文件 diff 拦截、reporter 渲染与硬约束、图端到端出报告）；ruff/mypy strict（43 文件）绿；
+  2. **真实报告生成**：bug1（padding-top 12→64）与 bug2（overflow-wrap: anywhere）两份 `PR_REPORT.md` 从磁盘真实工件渲染，证据链表四行全部可溯源，S03 声明在位；
+  3. 硬约束双实证：单测删 render_diff 证据 → EvidenceGapError；e2e 中 fake verifier 漏传 screenshot 证据 → 渲染被拒（修 fake 后通过）——"任何断言无证据则渲染失败"不是口号；
+  4. bug3 配额窗口重试（后台 25 分钟）：仍 FAIL——planner 三假设全走 CSS 路线，JSX 内联样式假设排序不足；**M0 定格 2/3**。
+- 结论：**达到成功目标，正收益**。证据链闭环（§9）从模型层落到工件层；暴露的下一改进点明确：planner 假设需"候选文件多样性"约束（同轮假设应覆盖候选中不同文件），预计可解锁 bug3。
+- 问题与归因：测试夹具文件名撞车（p.diff 双写）导致的假失败一次（已修）；critic diff 头解析对 "--- a/" 行误切一次（已修）——两处均被单测即时抓获。
+- 下一步：planner 多样性约束 → bug3 补跑 → M0 3/3 收口；EXP-09 CLI 打磨+降级+发布 v0.1.0（W6）。

@@ -91,3 +91,24 @@
 - 结果与证据：门禁三绿（mypy 30 文件/pytest 18 passed）；真实链路 **2/3 补丁生成**（bug1 +z-index:2、bug3 追加规则；bug2 唯一性守卫正确拦截 2x 片段）；原仓库文件全程未动（worktree 隔离+回滚测试）；语义有效性待 EXP-07 oracle。
 - 问题与坑：① 模型爱复述候选的 display 格式（路径带行号后缀）→ 归一化；② 模型在 JSON 字符串塞字面换行 → json.loads(strict=False)；③ 行号视图诱导复制前缀 → fixer 一律喂原文；④ 免费档窗口极短（分钟级放出 1-5 次）。
 - 明日入口：EXP-07 验证 oracle（vision/ 像素 diff+布局断言+既有测试）+ LangGraph 装配回环（fail→下一假设，≤3 次）。
+
+## #010 2026-10-30
+- 今日目标：EXP-07 验证 oracle + LangGraph 回环，解决 EXP-06 的语义存疑补丁。
+- 做了什么：vision 三组可执行断言（像素/遮挡/溢出+错位 DOM）；patched_env 副本仓库（junction 复用 node_modules）；verifier 四通道；planner v2-feedback+自修复+路径前缀匹配；fixer 行级确定性修复器+带错重试；builder 回环（stale patch 清理）；单测 +5。
+- 结果与证据：**bug1 真修复 PASS（padding-top 12→64，round0 收敛，像素 43.6%+无遮挡）**；bug2/bug3 在新增 DOM 断言下正确 FAIL（溢出 755>298；错位 spread=56px）——初版 oracle 曾对二者假阳性，已堵死。24 tests 全绿。两次关键自查：verifier worktree 根少一层目录（假验证）；像素"有变化"放行无效补丁。
+- 问题与坑：① oracle 自身必须被独立核验（检查 patched_repo 内文件内容），否则"假验证"与"假复现"同样致命；② 确定性本地修复优先于 API 重试（行级修复器零成本救活 padding 类补丁）；③ planner 反馈轮输出噪声是回环收敛瓶颈。
+- 明日入口：EXP-08 证据链 Store+Reporter；planner 强化（错位模板/schema 约束）后补跑 bug2/3 至 M0 验收。
+
+## #011 2026-10-30
+- 今日目标：planner 强化 → M0 补跑。
+- 做了什么：planner v3/v3.1 修复模式库（三条实测 no-op 定律入提示词）+ line_hint 宽容转换；fixer JSON 语法坏修复分支（引号转义指令）；图防御（fixer 对空 hypotheses 的 KeyError）。
+- 结果与证据：**bug2 真修复 PASS**（overflow-wrap: anywhere 四通道绿，溢出实测消除）；bug3 首轮 CSS margin-top no-op（内联 style 优先级实证）后配额 429×3 耗尽——**M0 = 2/3**（bug1 padding-top / bug2 overflow-wrap 均 oracle 四通道验证）；bug3 正确修法已入 v3.1 模式库，待配额。
+- 问题与坑：① 模型输出 line_hint 为字符串区间（"121-124"）曾静默丢弃正确假设——宽容转换；② 内联 style > CSS 类选择器：对 style={{marginTop:56}} 加类级 margin-top:0 实测零变化（通用 CSS 规律，已入模式库）；③ 本机 ugrep 别名会干扰管道 grep，直接 cat 文件更稳。
+- 明日入口：配额恢复跑 bug3（预期 v3.1 模式→JSX 内联修改→PASS→M0 3/3）；EXP-08 证据链 Store+critic+reporter；github 443 恢复后补推 exp/EXP-07-verifier。
+
+## #012 2026-10-30
+- 今日目标：EXP-08 证据链+critic+reporter；bug3 配额重试。
+- 做了什么：EvidenceStore（内容寻址/manifest 只增）；规则式非对称 critic；硬约束 reporter；builder 集成 critic→reporter；单测 +4（28 全绿）；真实生成 bug1/bug2 两份 PR_REPORT.md；后台 25 分钟后重试 bug3。
+- 结果与证据：bug1/bug2 报告证据链四行全部指向磁盘真实工件；硬约束双实证（单测+e2e）；bug3 重试仍 FAIL（三假设全 CSS）——M0=2/3。
+- 问题与坑：① 测试夹具同目录同名文件互相覆盖会制造"假 bug"（critic 解析误报的真相）——夹具文件名必须唯一；② planner 同轮假设文件同质化是 bug3 收敛瓶颈（改进项：多样性约束）。
+- 明日入口：planner 假设文件多样性约束 → bug3 → M0 3/3；EXP-09（CLI/降级链/PyPI 0.1.0）；github 443 恢复后补推 exp/EXP-07-verifier（含本卷全部新提交）。
