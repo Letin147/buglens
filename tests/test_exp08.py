@@ -203,24 +203,23 @@ def test_reporter_renders_and_enforces_evidence(tmp_path: Path) -> None:
 
 def test_graph_end_to_end_produces_report(tmp_path: Path) -> None:
     golden = Path(__file__).resolve().parents[1] / "examples" / "golden-1"
-    before = tmp_path / "before.png"
-    before.write_bytes(b"png")
+    # the graph registers capture evidence at <capture_dir>/screenshot.png
+    capture = tmp_path / "screenshot.png"
+    capture.write_bytes(b"png")
     after = tmp_path / "after.png"
     after.write_bytes(b"png")
-    evidence = [
-        Evidence(kind="screenshot", artifact=before, claim="修复前截图", produced_by="reproducer"),
-        Evidence(kind="render_diff", artifact=after, claim="修复后截图", produced_by="verifier"),
-    ]
 
     def passing_verify(inp: VerifyInput) -> VerifyOutput:
         diff = inp.patch.diff_path
-        evidence.append(
-            Evidence(kind="diff", artifact=diff, claim="最小补丁", produced_by="fixer")
-        )
+        evidence = [
+            Evidence(kind="render_diff", artifact=after, claim="修复后截图",
+                     produced_by="verifier"),
+            Evidence(kind="diff", artifact=diff, claim="最小补丁", produced_by="fixer"),
+        ]
         return VerifyOutput(
             verdict=_verdict(),
             after_screenshot=after,
-            evidence=[e for e in evidence if e.kind in ("render_diff", "screenshot")],
+            evidence=evidence,
         )
 
     deps = PipelineDeps(

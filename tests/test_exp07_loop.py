@@ -221,3 +221,31 @@ def test_layout_defects_in_region(tmp_path: Path) -> None:
     assert any("顶边不对齐" in d for d in defects)
     clean_region = [0, 700, 1280, 100]
     assert layout_defects_in_region(path, clean_region) == []
+
+
+def test_run_fix_degrades_cleanly_on_vlm_failure(tmp_path: Path) -> None:
+    """EXP-09 drill: provider failure surfaces as VLMError (no hang/crash)."""
+    import pytest as _pytest
+
+    from buglens.graph.full_pipeline import FixOptions, run_fix
+    from buglens.models.base import BaseVLM, VLMError, VLMResponse
+
+    class DeadVLM(BaseVLM):
+        name = "dead"
+
+        def complete_vision(self, image: Path, prompt: str) -> VLMResponse:
+            raise VLMError("simulated quota exhaustion (drill)")
+
+    golden = Path(__file__).resolve().parents[1] / "examples" / "golden-1"
+    if not (golden / "node_modules").exists():
+        _pytest.skip("golden-1 deps missing (npm install) — CI-fast path")
+
+    class DeadLLM:  # never reached: visual_analyst fails first
+        name = "dead"
+
+    with _pytest.raises(VLMError):
+        run_fix(
+            FixOptions(repo=golden, fragment="#/bug1", port=5297, out=tmp_path / "run"),
+            vlm=DeadVLM(),
+            llm=DeadLLM(),  # type: ignore[arg-type]
+        )

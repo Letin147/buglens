@@ -171,3 +171,23 @@ def test_fixer_rejects_non_unique_fragment(tmp_path: Path) -> None:
             ),
             FakeLLM(answer),
         )
+
+
+def test_fixer_salvages_unescaped_jsx_quotes(tmp_path: Path) -> None:
+    """EXP-09 blocker: JSX className="..." inside JSON strings breaks
+    json.loads even with strict=False; the deterministic salvager recovers."""
+    raw = (
+        '```json\n'
+        '{"edits":[{"old":"<section className="price-card popular" '
+        'style={{ marginTop: 56 }}>","new":"<section className="price-card '
+        'popular">"}]}\n'
+        '```'
+    )
+    from buglens.agents.fixer.run import _salvage_edits
+
+    salvaged = _salvage_edits(raw)
+    assert salvaged is not None
+    assert salvaged["edits"][0]["old"] == (
+        '<section className="price-card popular" style={{ marginTop: 56 }}>'
+    )
+    assert salvaged["edits"][0]["new"] == '<section className="price-card popular">'

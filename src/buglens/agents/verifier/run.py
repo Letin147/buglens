@@ -14,7 +14,11 @@ from buglens.repro.reproducer import Reproducer
 from buglens.vision.layout import covered_elements_in_region, layout_defects_in_region
 from buglens.vision.pixels import region_change_ratio
 
-MIN_REGION_CHANGE = 0.02  # <2% pixels changed in the anomaly region => no-op patch
+MIN_REGION_CHANGE = 0.005
+# Anti-no-op guard, empirically calibrated (EXP-07/09 real runs): under
+# deterministic reproduction a no-op patch measures EXACTLY 0.0% (SSIM=1.0),
+# while real fixes measured 1.9%–43.6%. The old 2% bar false-negatived a real
+# 56px card shift (1.92%) because uniform backgrounds dilute the ratio.
 TEST_TIMEOUT_S = 600
 
 

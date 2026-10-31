@@ -38,6 +38,7 @@ class PipelineState(TypedDict, total=False):
     report: VisualReport
     candidates: list[Any]
     hypotheses: list[Hypothesis]
+    hypothesis_idx: int
     final_hypothesis: Hypothesis | None
     patch: Patch | None
     verdict: Verdict | None
@@ -68,8 +69,16 @@ def build_pipeline(deps: PipelineDeps) -> Any:
     """Compile the graph; `verify_fn` is injectable for loop tests."""
 
     def locator_node(state: PipelineState) -> PipelineState:
+        capture_evidence = Evidence(
+            kind="screenshot",
+            artifact=deps.capture_dir / "screenshot.png",
+            claim="修复前复现截图",
+            produced_by="reproducer",
+        )
         if deps.index is None:
-            return state  # candidates pre-seeded (tests / pre-indexed runs)
+            # candidates pre-seeded (tests / pre-indexed runs); still register
+            # the capture evidence so the reporter's chain stays complete
+            return {**state, "evidence": _merge(state, [capture_evidence])}
         out = locator_run(
             LocatorInput(
                 report=state["report"],
@@ -81,7 +90,11 @@ def build_pipeline(deps: PipelineDeps) -> Any:
             deps.index,
             deps.index.vectors,
         )
-        return {**state, "candidates": out.candidates, "evidence": _merge(state, out.evidence)}
+        return {
+            **state,
+            "candidates": out.candidates,
+            "evidence": _merge(state, [capture_evidence, *out.evidence]),
+        }
 
     def planner_node(state: PipelineState) -> PipelineState:
         try:
@@ -97,21 +110,28 @@ def build_pipeline(deps: PipelineDeps) -> Any:
                 deps.llm,
             )
         except VLMError as exc:
+            existing = state.get("hypotheses") or []
+            if existing:
+                # quota-blocked feedback round: rotate to the next existing
+                # hypothesis instead of dying (EXP-09: M0/bug3 unblocker)
+                return state
             return {**state, "error": f"planner: {exc}"}
         tried = state.get("tried_summary", "")
         for h in out.hypotheses:
             tried += f"- [{h.id}] {h.fix_plan}（target={h.target_path}）\n"
-        return {**state, "hypotheses": out.hypotheses, "tried_summary": tried,
+        return {**state, "hypotheses": out.hypotheses, "hypothesis_idx": 0,
+                "tried_summary": tried,
                 "evidence": _merge(state, out.evidence)}
 
     def fixer_node(state: PipelineState) -> PipelineState:
         hypotheses = state.get("hypotheses") or []
         retries = state.get("retries", 0)
+        idx = state.get("hypothesis_idx", 0)
         if not hypotheses:
             # planner errored (e.g. quota) or produced nothing usable
             return {**state, "passed": False, "patch": None,
                     "error": state.get("error") or "planner produced no hypotheses"}
-        hypothesis = hypotheses[min(retries, len(hypotheses) - 1)]
+        hypothesis = hypotheses[min(idx, len(hypotheses) - 1)]
         try:
             out = fixer_run(
                 FixerInput(
@@ -208,7 +228,13 @@ def build_pipeline(deps: PipelineDeps) -> Any:
         return "retry"
 
     def retry_node(state: PipelineState) -> PipelineState:
-        return {**state, "retries": state.get("retries", 0) + 1}
+        # advance the hypothesis pointer independently of the retry counter:
+        # early-died rounds (e.g. planner quota) must not skip hypotheses
+        return {
+            **state,
+            "retries": state.get("retries", 0) + 1,
+            "hypothesis_idx": state.get("hypothesis_idx", 0) + 1,
+        }
 
     graph = StateGraph(PipelineState)
     graph.add_node("locator", locator_node)
