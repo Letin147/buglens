@@ -1,4 +1,8 @@
-"""EXP-08 tests: evidence store, critic, reporter, and graph end-to-end report."""
+"""EXP-08 tests: evidence store, critic, reporter, and graph end-to-end report.
+
+Self-contained on purpose: a cross-file fixture import (test_exp07_loop)
+sorted differently across ruff versions and broke CI (PR#4 lesson).
+"""
 
 from __future__ import annotations
 
@@ -7,16 +11,71 @@ from pathlib import Path
 
 import pytest
 
-from test_exp07_loop import StubLLM, _candidates, _report
-
 from buglens.agents.critic import CriticInput
 from buglens.agents.critic import run as critic_run
+from buglens.agents.locator.run import CodeCandidate
 from buglens.agents.reporter import ReporterInput
 from buglens.agents.reporter import run as reporter_run
 from buglens.agents.verifier.run import Verdict, VerifyInput, VerifyOutput
 from buglens.evidence.store import EvidenceGapError, EvidenceStore
 from buglens.graph.builder import PipelineDeps, build_pipeline
-from buglens.graph.state import Evidence, Hypothesis, Patch
+from buglens.graph.state import Evidence, Hypothesis, Patch, VisualReport
+from buglens.models.base import BaseLLM, VLMResponse
+
+PLANNER_OK = json.dumps(
+    {
+        "hypotheses": [
+            {
+                "id": "H1",
+                "root_cause": "中间卡片 marginTop 过大",
+                "fix_plan": "把 Bug3.tsx 内联 marginTop: 56 改为 0",
+                "target_path": "src/bugs/Bug3.tsx",
+                "line_hint": 15,
+                "expected_visual_change": "三卡顶部对齐",
+                "confidence": 0.9,
+            }
+        ]
+    },
+    ensure_ascii=False,
+)
+
+FIXER_OK = json.dumps(
+    {"edits": [{"old": "marginTop: 56", "new": "marginTop: 0"}]}, ensure_ascii=False
+)
+
+
+class StubLLM(BaseLLM):
+    """Routes by prompt role: planner prompts get a plan, fixer prompts get edits."""
+
+    name = "stub"
+
+    def complete_text(self, prompt: str) -> VLMResponse:
+        answer = PLANNER_OK if "修复规划师" in prompt else FIXER_OK
+        return VLMResponse(text=answer, elapsed_s=0.01, total_tokens=5)
+
+
+def _report() -> VisualReport:
+    return VisualReport(
+        anomaly_region=[420, 170, 590, 470],
+        symptom="专业版卡片垂直位置低于基础版与企业版",
+        severity="mid",
+        confidence=0.8,
+        prompt_version="test",
+        model="stub",
+    )
+
+
+def _candidates() -> list[CodeCandidate]:
+    return [
+        CodeCandidate(
+            path="src/bugs/Bug3.tsx",
+            line_start=1,
+            line_end=38,
+            score=0.98,
+            channels=["bm25", "identifier", "vector"],
+            snippet="export default function Bug3() ...",
+        )
+    ]
 
 
 def test_store_content_addressing_and_manifest(tmp_path: Path) -> None:
